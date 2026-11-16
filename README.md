@@ -7,7 +7,7 @@ on-device classifier. Nothing leaves your machine.
 ```
  YouTube page ──► content.js ──► background.js ──► 127.0.0.1:8765 (server.py + Laya)
    cards, comments,   keyword pre-filter       cache        "is this about GTA 6?"
-   the watched video  + blur / reveal                       "story/gameplay or business news?"
+   the watched video  + blur / reveal                       "story / gameplay / trailer / news / music / meme?"
 ```
 
 ## How a card is judged
@@ -20,15 +20,20 @@ on-device classifier. Nothing leaves your machine.
 3. **Laya** scores every snippet, including ones with no keyword, so oblique titles like
    "the saddest death in the new Rockstar game" are also caught. One batched call per page.
 4. Modes (set in the popup):
-   - **everything about it** (default): hide anything on-topic.
-   - **only story / gameplay**: let release dates, prices and sales news through.
+   - **only story / gameplay** (default): hide plot spoilers and gameplay footage, walkthroughs,
+     guides and leaks. Trailers, trailer reactions, news, music and memes stay visible.
+   - **everything about it**: hide anything on-topic.
 5. Clicking a blurred card reveals it. On a watch page, the player is blacked out and paused
    until you click it.
 
 ## Running it
 
 ```powershell
-pip install -r server/requirements.txt
+# one-time: project venv with CUDA PyTorch (pick the cuXXX matching your driver)
+python -m venv server/.venv
+server/.venv/Scripts/python -m pip install torch --index-url https://download.pytorch.org/whl/cu130
+server/.venv/Scripts/python -m pip install -r server/requirements.txt
+
 ./server/start.ps1          # first run without HF_HUB_OFFLINE=1 downloads the model (~2.3 GB)
 ```
 
@@ -38,16 +43,20 @@ developing, or sign it via AMO (unlisted) for permanent use.
 
 ## Accuracy
 
-`python server/eval_topics.py` runs the questions on 28 hand-labelled titles:
+`python server/eval_topics.py` runs the questions on 44 hand-labelled titles:
 
 | question | threshold | accuracy |
 |---|---|---|
-| on-topic (GTA VI vs other) | 0.5 | 93% (26/28) |
-| story/gameplay vs business news (GTA VI titles only) | 0.5 | 100% (15/15) |
+| on-topic (GTA VI vs other) | 0.5 | 95% (42/44) |
+| story/gameplay vs trailer/news/music/meme (GTA VI titles only) | 0.4 | 93% (28/30) |
 
-Laya alone misses some explicit titles, for example "GTA 6 ENDING EXPLAINED" scored 0.39. The
-strong-keyword rule covers those. The set is tiny, so **add real titles from your feed to `DATA`
-in `eval_topics.py`** and tune the thresholds in the popup.
+Remaining misses include "Leonida full map leaked!" and "GTA 6: all 12 heists ranked" (spoilers
+scored as news/trailer). Explicit "GTA 6" titles that Laya scores low on topic are covered by the
+strong-keyword rule. The set is small, so **add real titles from your feed to `DATA` in
+`eval_topics.py`** and tune the thresholds in the popup.
+
+Note: Laya reads the option *keys* as well as their descriptions, so keep keys meaningful
+(`story_spoiler`, not `a`).
 
 ## Adding a topic
 
@@ -56,6 +65,7 @@ with the same key.
 
 ## Performance
 
-Laya runs on CPU with the default PyTorch wheel, at about 375 ms per title on this machine.
-Results are cached, and blurring is instant for keyword hits, so the delay only affects untagged
-cards. A CUDA build of PyTorch should cut this to a few ms per title on a GPU.
+Use a CUDA build of PyTorch (see above). The default Windows wheel is CPU-only, which manages
+about 0.5 s per title, too slow for a busy YouTube page. The extension sends one request per tab
+at a time and never re-sends a title that is already waiting. The server re-checks its cache after
+waiting for the model, so several tabs don't classify the same titles twice.

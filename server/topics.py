@@ -4,10 +4,11 @@ Two questions per snippet, both phrased as "what does this text say" (Laya
 handles that far better than "should this be hidden"):
 
   subject  - choice: is it about the topic, another game, or not a game?
-  kind     - choice: is it about what happens *in* the game (spoiler-ish) or
-             about the game as a product (release/price/sales)?
+  kind     - choice: story spoiler / gameplay / trailer / news / music / opinion.
+             "spoiler" = P(story_spoiler) + P(gameplay); trailers, news, music
+             and memes are deliberately not spoilers.
 
-The extension turns P(subject=topic) and P(kind=content) into blur decisions.
+The extension turns P(subject=topic) and the spoiler score into blur decisions.
 Phrasings were picked by running eval_topics.py; re-run it after any change.
 Add a topic by adding an entry here and a keyword list in extension/topics.js.
 """
@@ -34,12 +35,15 @@ def build_questions(topic: str) -> dict:
         },
         "kind": {
             "type": "choice",
-            "instructions": "What is this video title about?",
+            "instructions": "What kind of video is this?",
             "criteria": {
-                "content": "what happens in the game: story, characters, ending, missions, "
-                           "gameplay, map, secrets, trailer details",
-                "business": "news about the game: release date, delay, price, sales, "
-                            "preorders, company earnings",
+                "story_spoiler": "reveals the plot, ending, deaths or twists",
+                "gameplay": "shows playing the game: let's play, walkthrough, missions, guide, "
+                            "map, leaked footage",
+                "trailer": "a trailer, or reaction to or breakdown of a trailer",
+                "news": "news about release date, delay, price, sales, preorders, earnings, platforms",
+                "music": "music, soundtrack or songs",
+                "opinion": "meme, joke, opinion or hype",
             },
         },
     }
@@ -48,5 +52,6 @@ def build_questions(topic: str) -> dict:
 def summarise(answers: dict) -> dict:
     return {
         "about": round(float(answers["subject"]["probabilities"]["topic"]), 4),
-        "spoiler": round(float(answers["kind"]["probabilities"]["content"]), 4),
+        "spoiler": round(float(answers["kind"]["probabilities"]["story_spoiler"]
+                               + answers["kind"]["probabilities"]["gameplay"]), 4),
     }

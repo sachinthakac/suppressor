@@ -17,9 +17,9 @@
   const DEFAULTS = {
     enabled: true,
     topic: "gta6",
-    mode: "all",        // "all": hide anything about the topic; "spoilers": only story/gameplay content
-    aboutThreshold: 0.55,
-    spoilerThreshold: 0.5,
+    mode: "spoilers",        // "all": hide anything about the topic; "spoilers": only story/gameplay content
+    aboutThreshold: 0.5,
+    spoilerThreshold: 0.4,
     paranoid: false,    // blur every item until the classifier has cleared it
   };
   let cfg = { ...DEFAULTS };
@@ -27,7 +27,9 @@
 
   const verdicts = new Map();  // text -> {about, spoiler} | "error"
   const queue = new Set();     // texts awaiting classification
+  const inflight = new Set();  // texts sent, answer not back yet
   let flushTimer = null;
+  let busy = false;            // one request at a time per tab; the server is serial anyway
   let scanTimer = null;
 
   // ---- decisions ---------------------------------------------------------
@@ -68,7 +70,7 @@
     }
     const v = verdicts.get(text);
     if (v === undefined) {
-      if (!queue.has(text)) enqueue(text);
+      if (!queue.has(text) && !inflight.has(text)) enqueue(text);
       setState(el, shouldHide(text, undefined) ? "pending" : "shown", `${topic.name} (checking…)`);
       return;
     }
@@ -96,7 +98,7 @@
       if (site.pageExtras) document.querySelectorAll(site.pageExtras).forEach((x) => delete x.dataset.supRevealed);
     }
     const v = verdicts.get(title);
-    if (v === undefined && !queue.has(title)) enqueue(title);
+    if (v === undefined && !queue.has(title) && !inflight.has(title)) enqueue(title);
     const hide = shouldHide(title, v);
     const targets = [player, ...(site.pageExtras ? document.querySelectorAll(site.pageExtras) : [])];
     for (const t of targets) {
@@ -114,24 +116,37 @@
 
   function enqueue(text) {
     queue.add(text);
-    if (!flushTimer) flushTimer = setTimeout(flush, 120);
+    if (!flushTimer && !busy) flushTimer = setTimeout(flush, 120);
   }
 
   async function flush() {
     flushTimer = null;
+    if (busy || !queue.size) return;
+    busy = true;
     const texts = [...queue].slice(0, 64);
-    texts.forEach((t) => queue.delete(t));
-    if (queue.size) flushTimer = setTimeout(flush, 0);
+    texts.forEach((t) => { queue.delete(t); inflight.add(t); });
     let res;
     try {
       res = await browser.runtime.sendMessage({ type: "classify", topic: cfg.topic, texts });
     } catch (e) {
       res = { error: String(e) };
     }
+    let failed = false;
     texts.forEach((t, i) => {
+      inflight.delete(t);
       const r = res && res.results && res.results[i];
+      if (!r) failed = true;
       verdicts.set(t, r || "error");
     });
+    busy = false;
+    if (failed) {
+      // Server down or erroring: keep keyword hits blurred, retry in a while.
+      setTimeout(() => {
+        for (const [t, v] of verdicts) if (v === "error") verdicts.delete(t);
+        scheduleScan();
+      }, 15000);
+    }
+    if (queue.size) flushTimer = setTimeout(flush, 0);
     scheduleScan();
   }
 

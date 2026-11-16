@@ -83,7 +83,7 @@ def _load() -> None:
     global agent
     t = time.time()
     log.info("loading %s ...", MODEL_ID)
-    agent = laya.load(MODEL_ID)
+    agent = laya.load(MODEL_ID, device=os.environ.get("SUPPRESSOR_DEVICE"))
     # Warm up so the first real page isn't slow.
     agent.predict_batch(["GTA 6 trailer breakdown", "cat video"], build_questions("gta6"))
     log.info("model ready in %.1fs on %s", time.time() - t, getattr(agent, "device", "?"))
@@ -115,13 +115,25 @@ def classify(req: ClassifyRequest):
     if todo_txt:
         t0 = time.time()
         with lock:
-            out = agent.predict_batch(todo_txt, build_questions(req.topic), batch_size=32)
-        for i, t, r in zip(todo_idx, todo_txt, out):
-            s = summarise(r["answers"])
-            cache.put(_key(req.topic, t), s)
-            results[i] = s
-        log.info("classified %d new (%d cached) in %.0f ms",
-                 len(todo_txt), len(texts) - len(todo_txt), (time.time() - t0) * 1000)
+            t1 = time.time()
+            # Another request may have classified some of these while we waited.
+            still_idx, still_txt = [], []
+            for i, t in zip(todo_idx, todo_txt):
+                hit = cache.get_(_key(req.topic, t))
+                if hit is not None:
+                    results[i] = hit
+                else:
+                    still_idx.append(i)
+                    still_txt.append(t)
+            if still_txt:
+                out = agent.predict_batch(still_txt, build_questions(req.topic), batch_size=32)
+                for i, t, r in zip(still_idx, still_txt, out):
+                    s = summarise(r["answers"])
+                    cache.put(_key(req.topic, t), s)
+                    results[i] = s
+        t2 = time.time()
+        log.info("classified %d new (%d cached) in %.0f ms (+%.0f ms waiting)",
+                 len(still_txt), len(texts) - len(still_txt), (t2 - t1) * 1000, (t1 - t0) * 1000)
 
     return {"results": results}
 

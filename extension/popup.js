@@ -1,9 +1,9 @@
 const DEFAULTS = {
   enabled: true,
   topic: "gta6",
-  mode: "all",
-  aboutThreshold: 0.55,
-  spoilerThreshold: 0.5,
+  mode: "spoilers",
+  aboutThreshold: 0.5,
+  spoilerThreshold: 0.4,
   paranoid: false,
 };
 

@@ -16,23 +16,38 @@ import laya  # noqa: E402
 from topics import build_questions, summarise  # noqa: E402
 
 DATA = [
-    # about GTA6, spoilery
+    # about GTA6, spoiler = story or gameplay content -> hide
     ("GTA 6 ENDING EXPLAINED - What happens to Lucia and Jason", 1, 1),
     ("I beat GTA 6 in 40 hours - full story recap", 1, 1),
     ("GTA VI Final Mission Walkthrough (No Commentary)", 1, 1),
     ("Lucia's betrayal changes everything", 1, 1),
     ("Every secret in Vice City's map | GTA 6", 1, 1),
-    ("GTA 6 Trailer 3 breakdown: every detail you missed", 1, 1),
     ("The saddest death in Grand Theft Auto VI", 1, 1),
     ("Leonida full map leaked!", 1, 1),
     ("GTA 6 gameplay - first 2 hours", 1, 1),
     ("Jason dies?? GTA 6 theory confirmed", 1, 1),
-    # about GTA6, not spoilery
+    ("GTA 6 Part 1 - Let's Play (PS5)", 1, 1),
+    ("I found a hidden ending in GTA 6", 1, 1),
+    ("GTA 6: all 12 heists ranked", 1, 1),
+    ("The plot twist in GTA 6 nobody saw coming", 1, 1),
+    ("GTA 6 100% completion guide", 1, 1),
+    # about GTA6, not spoilers -> show
     ("GTA 6 delayed again - new release date", 1, 0),
     ("GTA 6 price confirmed at $80", 1, 0),
     ("Rockstar says GTA 6 sold 25 million copies on day one", 1, 0),
     ("Should you preorder GTA VI?", 1, 0),
     ("Take-Two earnings call: GTA 6 still on track", 1, 0),
+    ("Grand Theft Auto VI Trailer 3", 1, 0),
+    ("GTA 6 Trailer 3 breakdown: every detail you missed", 1, 0),
+    ("Reacting to the GTA 6 trailer!!", 1, 0),
+    ("GTA 6 Trailer song - Tom Petty Love Is A Long Road", 1, 0),
+    ("GTA VI soundtrack: every licensed song so far", 1, 0),
+    ("GTA 6 radio station music mix (1 hour)", 1, 0),
+    ("Waiting for GTA 6 be like... (meme)", 1, 0),
+    ("Is GTA 6 overhyped? My honest opinion", 1, 0),
+    ("GTA 6 PC release - will it ever happen?", 1, 0),
+    ("PS5 Pro GTA 6 bundle unboxing", 1, 0),
+    ("GTA 6 file size and system requirements", 1, 0),
     # not about GTA6
     ("GTA 5 speedrun world record", 0, 0),
     ("GTA San Andreas ending - Grove Street forever", 0, 1),
@@ -47,6 +62,7 @@ DATA = [
     ("Minecraft but every block is TNT", 0, 0),
     ("The Last of Us Part 2 story explained", 0, 1),
     ("Rockstar Games history documentary", 0, 0),
+    ("Tom Petty - Love Is A Long Road (Official Audio)", 0, 0),
 ]
 
 
@@ -66,14 +82,14 @@ def main():
     for (text, a, s), r in zip(DATA, out):
         sm = summarise(r["answers"])
         pa, ps = sm["about"], sm["spoiler"]
-        mark = "" if (pa >= 0.7) == bool(a) else "  <-- about wrong"
+        mark = "" if (pa >= 0.5) == bool(a) else "  <-- about wrong"
         print(f"{pa:6.2f} {ps:6.2f}  {a}{s}   {text[:60]}{mark}")
 
     for name, idx in (("about", 1), ("spoiler", 2)):
         rows = DATA if name == "about" else [d for d in DATA if d[1]]
         outs = out if name == "about" else [o for d, o in zip(DATA, out) if d[1]]
         key = "about" if name == "about" else "spoiler"
-        for thr in (0.5, 0.6, 0.7):
+        for thr in ((0.4, 0.5, 0.6) if name == "about" else (0.3, 0.4, 0.5)):
             acc = sum((summarise(o["answers"])[key] >= thr) == bool(d[idx]) for d, o in zip(rows, outs)) / len(rows)
             print(f"{name:8s} thr={thr}: acc {acc:.0%} (n={len(rows)})")
 
