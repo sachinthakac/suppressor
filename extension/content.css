@@ -1,0 +1,41 @@
+[data-sup-state="hidden"],
+[data-sup-state="pending"] {
+  position: relative !important;
+  cursor: pointer !important;
+}
+
+[data-sup-state="hidden"] > *,
+[data-sup-state="pending"] > * {
+  filter: blur(18px) saturate(0.3) !important;
+  pointer-events: none !important;
+  user-select: none !important;
+}
+
+[data-sup-state="hidden"]::after,
+[data-sup-state="pending"]::after {
+  content: "🙈 " attr(data-sup-reason) " — click to reveal";
+  position: absolute;
+  inset: 0;
+  z-index: 2147483000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  text-align: center;
+  font: 600 13px/1.3 system-ui, sans-serif;
+  color: #fff;
+  background: rgba(20, 20, 24, 0.55);
+  border-radius: 12px;
+  pointer-events: none;
+}
+
+[data-sup-state="pending"]::after {
+  content: "🙈 checking…";
+  background: rgba(20, 20, 24, 0.35);
+}
+
+/* The main player: hide the picture completely rather than blur it. */
+#movie_player[data-sup-state="hidden"] video,
+#movie_player[data-sup-state="pending"] video {
+  opacity: 0 !important;
+}

@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font: 13px system-ui, sans-serif; width: 270px; margin: 12px; color: #222; }
+    h1 { font-size: 15px; margin: 0 0 8px; }
+    label { display: flex; align-items: center; gap: 6px; margin: 8px 0; }
+    select, input[type=range] { flex: 1; }
+    .status { padding: 6px 8px; border-radius: 6px; background: #eee; margin-bottom: 8px; }
+    .ok { background: #dff3e1; } .bad { background: #fbe0e0; }
+    small { color: #666; }
+    output { width: 32px; text-align: right; }
+  </style>
+</head>
+<body>
+  <h1>🙈 Suppressor</h1>
+  <div id="status" class="status">Checking server…</div>
+  <label><input type="checkbox" id="enabled"> Enabled</label>
+  <label>Topic <select id="topic"></select></label>
+  <label>Hide
+    <select id="mode">
+      <option value="all">everything about it</option>
+      <option value="spoilers">only story / gameplay</option>
+    </select>
+  </label>
+  <label title="How sure Laya must be that untagged text is about the topic">Topic ≥
+    <input type="range" id="aboutThreshold" min="0.3" max="0.9" step="0.05"><output for="aboutThreshold"></output></label>
+  <label title="Only in 'story / gameplay' mode">Spoiler ≥
+    <input type="range" id="spoilerThreshold" min="0.3" max="0.9" step="0.05"><output for="spoilerThreshold"></output></label>
+  <label><input type="checkbox" id="paranoid"> Paranoid <small>(blur everything until checked)</small></label>
+  <script src="topics.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
