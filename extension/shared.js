@@ -120,5 +120,32 @@ var Sup = (() => {
     return { hide: true, topic: t, keyword: keyword || hint, match: r.match, score, reasons, all: sup, shows };
   }
 
-  return { slug, titleCase, newTopic, resolveTopic, compileTopic, phraseRegex, decide, PALETTE };
+  // ---- classifier server ----------------------------------------------------
+
+  const DEFAULT_SERVER = "http://127.0.0.1:8765";
+  const SLOW_MS_PER_TITLE = 100;
+
+  // "http://localhost:9000/" -> "http://localhost:9000"; anything that isn't a
+  // local http address (the host permissions only cover these) -> null.
+  function normalizeServer(input) {
+    const m = String(input || "").trim().match(/^http:\/\/(127\.0\.0\.1|localhost)(?::(\d{1,5}))?\/?$/i);
+    if (!m) return null;
+    if (m[2] && (+m[2] < 1 || +m[2] > 65535)) return null;
+    return `http://${m[1].toLowerCase()}${m[2] ? ":" + +m[2] : ""}`;
+  }
+
+  // /health response -> {ok, slow, text}. Newer servers add backend/ms_per_title/version.
+  function describeHealth(r) {
+    if (!r || !r.ok) return { ok: false, slow: false, text: "Classifier offline" };
+    const ms = Number(r.ms_per_title);
+    const known = r.ms_per_title != null && Number.isFinite(ms) && ms > 0;
+    const parts = [r.device || "?"];
+    if (known) parts.push(`~${Math.round(ms)} ms/title`);
+    const slow = known && ms > SLOW_MS_PER_TITLE;
+    const detail = parts.join(", ");
+    return { ok: true, slow, detail, text: `Classifier running (${detail})` + (slow ? " · slow" : "") };
+  }
+
+  return { slug, titleCase, newTopic, resolveTopic, compileTopic, phraseRegex, decide, PALETTE,
+           DEFAULT_SERVER, normalizeServer, describeHealth };
 })();

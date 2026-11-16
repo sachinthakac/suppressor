@@ -41,32 +41,73 @@ has a **Test it** box: type a title and see the scores and verdict.
    matched keyword and a **Show anyway** button. Hovering a veiled card doesn't start YouTube's
    preview, and nothing under a veil can play. On a watch page, the player itself is veiled.
 
-## Running it
+## Installing
+
+### 1. The classifier server
+
+You need Python 3.12 or newer. From the repo (or the server bundle attached to a GitHub release):
 
 ```powershell
-# one-time: project venv with CUDA PyTorch (pick the cuXXX matching your driver)
-python -m venv server/.venv
-server/.venv/Scripts/python -m pip install torch --index-url https://download.pytorch.org/whl/cu130
-server/.venv/Scripts/python -m pip install -r server/requirements.txt
-
-./server/start.ps1          # first run without HF_HUB_OFFLINE=1 downloads the model (~2.3 GB)
+./setup.ps1                 # Windows
+```
+```bash
+./setup.sh                  # macOS / Linux
 ```
 
-Firefox: open `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on…** → pick
-`extension/manifest.json`. For a persistent install use `npx web-ext run -s extension` while
-developing, or sign it via AMO (unlisted) for permanent use.
+The script:
+- creates `server/.venv`;
+- picks PyTorch for the machine: CUDA if `nvidia-smi` finds an NVIDIA GPU, the standard build on
+  macOS (Apple GPU via MPS), otherwise CPU;
+- installs the pinned dependencies from `server/requirements.txt`;
+- downloads the model (about 850 MB, once);
+- runs a quick test that prints the device and the time per call;
+- offers to start the server automatically at login.
+
+It's safe to run again; it updates rather than breaks. Options: `-Device auto|cuda|cpu`,
+`-VenvPath`, `-Autostart` / `-NoAutostart`, `-DryRun` (prints what it would do). The bash
+versions are `--device`, `--venv`, `--autostart` / `--no-autostart`, `--dry-run`.
+
+To run the server by hand instead: `./server/start.ps1` on Windows, or
+`server/.venv/bin/python -I server/server.py` on macOS/Linux.
+
+### 2. The extension
+
+Regular Firefox only keeps **signed** extensions installed. Release builds attach a signed `.xpi`
+once signing is set up (see below); open it in Firefox to install. Until then, for development:
+`about:debugging#/runtime/this-firefox` → **Load Temporary Add-on…** → `extension/manifest.json`,
+or `npm install && npm start`, which launches a Firefox profile with the extension loaded.
+
+On first install the extension opens a welcome page that turns green once it can reach the
+server. If the server runs on another port, set it under **Options → Advanced**.
 
 ### Start the server automatically
 
-```powershell
-./server/install-autostart.ps1      # registers a logon task; starts it now
-./server/uninstall-autostart.ps1    # removes it
+`setup` offers this. To manage it yourself:
+
+| OS | install | remove |
+|---|---|---|
+| Windows | `server/autostart/install-autostart.ps1` | `server/autostart/uninstall-autostart.ps1` |
+| macOS (launchd) / Linux (systemd --user) | `server/autostart/install.sh` | `server/autostart/uninstall.sh` |
+
+On Windows this is a Task Scheduler task, **Suppressor server**, that runs `pythonw.exe` (no
+window) at logon and restarts it if it crashes. No admin rights are needed. On macOS it's a
+LaunchAgent and on Linux a systemd user service, both restarted on failure. Logs go to
+`server/server.log`. Don't also run `start.ps1`, because both use port 8765. The macOS and Linux
+installers have only been tested with simulated systems so far.
+
+## Releasing
+
+```bash
+npm install
+npm run lint && npm run build        # -> web-ext-artifacts/suppressor-<version>.zip
+WEB_EXT_API_KEY=... WEB_EXT_API_SECRET=... npm run sign   # signed .xpi (unlisted on AMO)
 ```
 
-This adds a Task Scheduler task, **Suppressor server**, for your user. No admin rights are needed.
-It runs `server/.venv/Scripts/pythonw.exe` (no console window) at logon and restarts it if it
-crashes. Output goes to `server/server.log`. To stop it for now: `Stop-ScheduledTask "Suppressor server"`.
-Don't run `start.ps1` at the same time; both use port 8765.
+Pushing a tag `v<version>` (it must match `extension/manifest.json`) runs
+`.github/workflows/release.yml`. That workflow lints, builds, signs if the repo secrets
+`AMO_JWT_ISSUER` / `AMO_JWT_SECRET` are set (from addons.mozilla.org → Developer Hub → Manage
+API Keys), and publishes a GitHub release with the `.xpi` and a server bundle. `ci.yml` lints
+every push and pull request to `main`.
 
 ## Backing up and sharing topics
 
@@ -93,7 +134,10 @@ Laya reads option *keys* as well as their descriptions, so reasons should be mea
 
 ## Performance
 
-Use a CUDA build of PyTorch (see above). The default Windows wheel is CPU-only, which manages
-about 0.5 s per title, too slow for a busy YouTube page. The extension sends one request per tab
-at a time and never re-sends a title that is already waiting. The server re-checks its cache after
-waiting for the model, so several tabs don't classify the same titles twice.
+On a GPU each title takes a few ms (about 7 ms on an RTX 4060). On a CPU it's about 0.75 s, so
+the extension only classifies items within about 1500px of the screen. Keyword matches are still
+blurred instantly everywhere, and the popup shows "slow" when the server reports more than
+100 ms per title. ONNX was measured as an alternative for CPUs (`server/bench_backends.py`):
+same answers, but about 0.63x the speed of PyTorch, so it isn't used. The extension sends one
+request per tab at a time and never re-sends a title that's already waiting. The server re-checks
+its cache after waiting for the model, so several tabs don't classify the same titles twice.

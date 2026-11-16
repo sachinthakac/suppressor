@@ -1,0 +1,15 @@
+{
+  "name": "suppressor",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Firefox extension that blurs content about topics you choose, using a local classifier.",
+  "scripts": {
+    "lint": "web-ext lint -s extension",
+    "build": "web-ext build -s extension -a web-ext-artifacts --overwrite-dest",
+    "sign": "web-ext sign -s extension -a web-ext-artifacts --channel unlisted",
+    "start": "web-ext run -s extension"
+  },
+  "devDependencies": {
+    "web-ext": "8.10.0"
+  }
+}

@@ -3,8 +3,9 @@
 // For every item (video card, post, comment) and for the page's own video:
 //   1. extract a short text snippet (sites.js)
 //   2. keyword/hint match for any topic -> veiled instantly ("pending")
-//   3. snippet batched to the background script -> local Laya server, which
-//      scores it against every enabled topic and its suppress/show reasons
+//   3. once the item is near the viewport (the watched video: immediately),
+//      the snippet is batched to the background script -> local Laya server,
+//      which scores it against every enabled topic and its suppress/show reasons
 //   4. Sup.decide() per topic -> veiled with reasons ("hidden") or released
 // YouTube recycles DOM nodes, so each element remembers the text it was judged
 // on (data-sup-sig) and is re-judged whenever that changes.
@@ -26,6 +27,29 @@
   let busy = false;
 
   const VEILED = "[data-sup-state='hidden'],[data-sup-state='pending']";
+
+  // Visible-first: an item's text is only sent to the classifier once the item
+  // is within NEAR_PX of the viewport, so a slow (CPU) classifier isn't asked
+  // to judge an entire infinite feed. Keyword/hint veils don't wait for this.
+  const NEAR_PX = 1500;
+  const near = new WeakSet();     // items currently within NEAR_PX of the viewport
+  const watched = new WeakSet();  // items handed to the observer
+  const nearObserver = typeof IntersectionObserver === "function"
+    ? new IntersectionObserver((entries) => {
+        let added = false;
+        for (const e of entries) {
+          if (e.isIntersecting) { if (!near.has(e.target)) { near.add(e.target); added = true; } }
+          else near.delete(e.target);
+        }
+        if (added) scheduleScan();
+      }, { rootMargin: `${NEAR_PX}px 0px ${NEAR_PX}px 0px` })
+    : null;
+
+  function isNear(el) {
+    if (!nearObserver) return true;
+    if (!watched.has(el)) { watched.add(el); nearObserver.observe(el); }
+    return near.has(el);
+  }
 
   // ---- decisions ---------------------------------------------------------
 
@@ -89,7 +113,9 @@
       el.dataset.supSig = text;
       delete el.dataset.supRevealed;
     }
-    need(text);
+    // Classify only near the viewport; evaluate() still veils keyword/hint
+    // matches right away ("pending" until the classifier has answered).
+    if (isNear(el)) need(text);
     apply(el, evaluate(text), "card");
   }
 

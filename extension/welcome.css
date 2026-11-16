@@ -1,0 +1,65 @@
+/* Welcome page; builds on the tokens and components in options.css. */
+main { max-width: 720px; }
+a { color: var(--focus); }
+code { background: var(--surface-2); padding: 1px 6px; border-radius: 6px; font-size: 12.5px; }
+
+.live {
+  display: flex; align-items: center; gap: 16px;
+  padding: 18px 20px; border-radius: 18px;
+  background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow);
+  transition: background 0.3s, border-color 0.3s;
+}
+.live-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.live-text b { font-size: 16px; }
+.live-text span { color: var(--dim); font-size: 13px; overflow-wrap: anywhere; }
+.beacon { position: relative; width: 14px; height: 14px; border-radius: 50%; flex: none; background: var(--warn); }
+.beacon::after {
+  content: ""; position: absolute; inset: -6px; border-radius: 50%;
+  border: 2px solid var(--warn); opacity: 0; animation: ping 1.6s ease-out infinite;
+}
+@keyframes ping { 0% { transform: scale(0.5); opacity: 0.8; } 100% { transform: scale(1.4); opacity: 0; } }
+
+.live.ok { background: var(--show-bg); border-color: color-mix(in srgb, var(--show) 40%, transparent); }
+.live.ok b { color: var(--show); }
+.live.ok .beacon { background: var(--show); }
+.live.ok .beacon::after { animation: none; }
+.live.slow { background: var(--warn-bg); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+.live.slow b { color: var(--warn); }
+.live.slow .beacon { background: var(--warn); }
+.live.slow .beacon::after { animation: none; }
+
+.intro { color: var(--dim); margin: 24px 2px 18px; }
+
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.step {
+  display: flex; gap: 14px; align-items: flex-start;
+  padding: 16px; border-radius: 18px;
+  background: var(--surface); border: 1px solid var(--line);
+}
+.step > div { min-width: 0; flex: 1; }
+.step h2 { font-size: 15px; margin: 2px 0 4px; }
+.step p { margin: 0; color: var(--dim); }
+.num {
+  display: grid; place-items: center; flex: none;
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--kw-bg); color: var(--kw); font-weight: 700; font-size: 13px;
+}
+.ready #stepDone .num { background: var(--show); color: #fff; }
+.ready #stepDone { border-color: color-mix(in srgb, var(--show) 40%, transparent); }
+
+.os { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 10px; }
+.os-name { width: 120px; font-size: 12px; font-weight: 600; color: var(--dim); }
+.os.mine .os-name { color: var(--fg); }
+.os.mine .os-name::after { content: "this computer"; display: block; font-weight: 500; color: var(--faint); }
+.cmd {
+  flex: 1; min-width: 0; display: block; padding: 8px 10px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--surface-2);
+  font: 12.5px/1.4 ui-monospace, "Cascadia Code", Consolas, monospace;
+  overflow-wrap: anywhere; user-select: all;
+}
+
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin-top: 24px; }
+.hint { color: var(--dim); font-size: 13px; }
+
+@media (max-width: 520px) { .os-name { width: 100%; } }
+@media (prefers-reduced-motion: reduce) { .beacon::after { animation: none; } }

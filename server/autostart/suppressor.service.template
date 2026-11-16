@@ -1,0 +1,19 @@
+# systemd --user unit for the Suppressor server (Linux).
+# Installed by server/autostart/install.sh into ~/.config/systemd/user/suppressor.service;
+# the @...@ placeholders are filled in there.
+[Unit]
+Description=Suppressor server (local Laya classifier on 127.0.0.1:8765)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=@SERVER_DIR@
+ExecStart="@PYTHON@" -I server.py
+Environment=PYTHONUNBUFFERED=1 USE_TF=0
+Restart=on-failure
+RestartSec=10
+StandardOutput=append:@LOG@
+StandardError=append:@LOG@
+
+[Install]
+WantedBy=default.target

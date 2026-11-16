@@ -405,10 +405,86 @@ browser.storage.onChanged.addListener((changes) => {
   if (changes.paranoid) $("paranoid").checked = changes.paranoid.newValue;
 });
 
-browser.runtime.sendMessage({ type: "health" }).then((r) => {
+// ---- classifier status + address (Advanced) ----------------------------------
+
+const health = (server) =>
+  browser.runtime.sendMessage(server == null ? { type: "health" } : { type: "health", server }).catch((e) => ({ ok: false, error: String(e) }));
+
+function showStatus(r) {
   const s = $("status");
-  s.className = "status " + (r && r.ok ? "ok" : "bad");
-  s.lastChild.textContent = r && r.ok ? `Classifier running (${r.device || "?"})` : "Classifier offline";
+  const hs = Sup.describeHealth(r);
+  s.className = "status " + (hs.ok ? (hs.slow ? "ok slow" : "ok") : "bad");
+  s.querySelector("span").textContent = hs.text;
+  s.title = hs.slow ? "Classification is slow on this machine. Only items near the screen are checked." : "";
+}
+const refreshStatus = () => health().then(showStatus);
+
+const serverInput = $("server");
+function serverValue() {
+  const raw = serverInput.value.trim();
+  return raw ? Sup.normalizeServer(raw) : Sup.DEFAULT_SERVER;
+}
+function markServer() {
+  const ok = !!serverValue();
+  serverInput.classList.toggle("invalid", !ok);
+  serverInput.setAttribute("aria-invalid", String(!ok));
+  return ok;
+}
+function serverResult(cls, label, detail) {
+  $("serverResult").replaceChildren(
+    h("span", { class: "conn " + cls }, label),
+    detail ? h("span", { class: "conn-detail" }, detail) : null);
+}
+
+async function saveServer() {
+  if (!markServer()) {
+    serverResult("bad", "Not saved", "Use http://127.0.0.1 or http://localhost, optionally with a port, e.g. http://127.0.0.1:8765");
+    return;
+  }
+  const value = serverValue();
+  const { server } = await browser.storage.local.get({ server: Sup.DEFAULT_SERVER });
+  if (serverInput.value.trim()) serverInput.value = value;
+  if (server === value) return;
+  if (value === Sup.DEFAULT_SERVER) await browser.storage.local.remove("server");
+  else await browser.storage.local.set({ server: value });
+  toast(`Classifier address set to ${value}`);
+  refreshStatus();
+}
+
+serverInput.addEventListener("input", () => { markServer(); $("serverResult").replaceChildren(); });
+serverInput.addEventListener("change", saveServer);
+serverInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); saveServer(); } });
+
+$("testServer").addEventListener("click", async () => {
+  const value = serverValue();
+  if (!markServer()) {
+    serverResult("bad", "Invalid address", "Use http://127.0.0.1 or http://localhost, optionally with a port.");
+    return;
+  }
+  const btn = $("testServer");
+  btn.disabled = true;
+  serverResult("", "Testing…");
+  const r = await health(value);
+  btn.disabled = false;
+  const hs = Sup.describeHealth(r);
+  if (hs.ok) {
+    const extra = [r.backend && `backend ${r.backend}`, r.version && `server ${r.version}`].filter(Boolean).join(" · ");
+    serverResult(hs.slow ? "slow" : "ok", hs.text.replace("Classifier running", "Connected"),
+      [`${value}/health`, extra, hs.slow ? "Slow: only items near the screen are classified." : ""].filter(Boolean).join(" · "));
+  } else {
+    serverResult("bad", "No classifier at " + value,
+      r && r.error ? r.error.replace(/^\w*Error:\s*/, "") : "Is the server running? See the setup guide.");
+  }
 });
 
-load();
+browser.storage.local.get({ server: Sup.DEFAULT_SERVER }).then(({ server }) => {
+  serverInput.value = Sup.normalizeServer(server) || Sup.DEFAULT_SERVER;
+  if (serverInput.value !== Sup.DEFAULT_SERVER) $("advanced").open = true;
+});
+refreshStatus();
+// Topic cards render asynchronously; jump to #advanced (welcome page link) once they're in.
+load().then(() => {
+  if (location.hash !== "#advanced") return;
+  $("advanced").open = true;
+  $("advanced").scrollIntoView({ block: "start" });
+});

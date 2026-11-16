@@ -18,6 +18,7 @@ import sys
 import threading
 import time
 from collections import OrderedDict
+from contextlib import asynccontextmanager
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 LOG_FILE = os.path.join(HERE, "server.log")
@@ -52,6 +53,7 @@ from pydantic import BaseModel, Field  # noqa: E402
 
 from topics import build_questions, signature, summarise  # noqa: E402
 
+SERVER_VERSION = "0.3.0"
 HOST = "127.0.0.1"
 PORT = int(os.environ.get("SUPPRESSOR_PORT", "8765"))
 MODEL_ID = os.environ.get("SUPPRESSOR_MODEL", "convaiinnovations/laya")
@@ -96,7 +98,37 @@ class LRU(OrderedDict):
             self.popitem(last=False)
 
 
-app = FastAPI(title="suppressor")
+WARMUP = TopicDef(id="warmup", name="GTA VI", description="GTA 6", kind="video game",
+                  categories={"spoilers": "reveals the plot", "news": "news"})
+# Short feed-style titles timed at startup to report ms_per_title on /health.
+BENCH_TITLES = [
+    "GTA 6 ending explained", "GTA 6 trailer 3 breakdown", "Lucia's betrayal changes everything",
+    "GTA 6 delayed again - new release date", "Leonida full map leaked!", "GTA 6 gameplay - first 2 hours",
+    "Reacting to the GTA 6 trailer!!", "GTA VI soundtrack: every licensed song so far",
+    "GTA 5 speedrun world record", "How to make sourdough bread at home", "iPhone 18 review",
+    "Elden Ring final boss guide", "Lofi hip hop radio - beats to relax/study to",
+    "Minecraft but every block is TNT", "Florida man arrested after alligator chase", "cat video",
+]
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    global agent, device_name, ms_per_title
+    t = time.time()
+    log.info("loading %s ...", MODEL_ID)
+    agent = laya.load(MODEL_ID, device=os.environ.get("SUPPRESSOR_DEVICE") or None)
+    device_name = str(getattr(agent, "device", "?"))
+    q = build_questions(WARMUP.model_dump())
+    # Warm up so the first real page isn't slow.
+    agent.predict_batch(["GTA 6 trailer breakdown", "cat video"], q)
+    t1 = time.perf_counter()
+    agent.predict_batch(BENCH_TITLES, q, batch_size=32)
+    ms_per_title = round((time.perf_counter() - t1) * 1000 / len(BENCH_TITLES), 1)
+    log.info("model ready in %.1fs on %s (%.1f ms/title)", time.time() - t, device_name, ms_per_title)
+    yield
+
+
+app = FastAPI(title="suppressor", lifespan=lifespan)
 # Extension pages have a moz-extension:// origin; content scripts proxy via the
 # background script, so only extension origins need CORS.
 app.add_middleware(
@@ -109,30 +141,18 @@ app.add_middleware(
 lock = threading.Lock()
 cache = LRU(CACHE_SIZE)
 agent = None
+device_name = "?"
+ms_per_title = 0.0
 
 
 def _key(sig: str, text: str) -> str:
     return hashlib.sha1(f"{sig}\x00{text}".encode()).hexdigest()
 
 
-WARMUP = TopicDef(id="warmup", name="GTA VI", description="GTA 6", kind="video game",
-                  categories={"spoilers": "reveals the plot", "news": "news"})
-
-
-@app.on_event("startup")
-def _load() -> None:
-    global agent
-    t = time.time()
-    log.info("loading %s ...", MODEL_ID)
-    agent = laya.load(MODEL_ID, device=os.environ.get("SUPPRESSOR_DEVICE"))
-    # Warm up so the first real page isn't slow.
-    agent.predict_batch(["GTA 6 trailer breakdown", "cat video"], build_questions(WARMUP.model_dump()))
-    log.info("model ready in %.1fs on %s", time.time() - t, getattr(agent, "device", "?"))
-
-
 @app.get("/health")
 def health():
-    return {"ok": agent is not None, "device": str(getattr(agent, "device", "?"))}
+    return {"ok": agent is not None, "device": device_name, "backend": "torch",
+            "ms_per_title": ms_per_title, "version": SERVER_VERSION}
 
 
 def _classify_topic(defn: dict, texts: list[str]) -> list[dict]:

@@ -43,15 +43,19 @@ $("enabled").addEventListener("change", (e) => browser.storage.local.set({ enabl
 $("paranoid").addEventListener("change", (e) => browser.storage.local.set({ paranoid: e.target.checked }));
 $("manage").addEventListener("click", () => { browser.runtime.openOptionsPage(); window.close(); });
 
-browser.runtime.sendMessage({ type: "health" }).then((r) => {
+$("setup").addEventListener("click", (e) => {
+  e.preventDefault();
+  browser.tabs.create({ url: browser.runtime.getURL("welcome.html") });
+  window.close();
+});
+
+browser.runtime.sendMessage({ type: "health" }).catch(() => null).then((r) => {
   const s = $("status");
-  if (r && r.ok) {
-    s.className = "status ok";
-    s.lastChild.textContent = `Classifier running (${r.device || "?"})`;
-  } else {
-    s.className = "status bad";
-    s.lastChild.textContent = "Classifier offline — keyword matches only. Run server/start.ps1";
-  }
+  const hs = Sup.describeHealth(r);
+  s.className = "status " + (hs.ok ? (hs.slow ? "ok slow" : "ok") : "bad");
+  s.querySelector("span").textContent = hs.ok ? hs.text : "Classifier offline — keyword matches only.";
+  if (hs.slow) s.title = "Classification is slow on this machine. Only items near the screen are checked.";
+  $("setup").hidden = hs.ok;
 });
 
 render();

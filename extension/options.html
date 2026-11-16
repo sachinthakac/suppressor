@@ -45,6 +45,26 @@
         <li>An on-topic item is hidden when its <b>hide</b> reasons add up past the threshold. <b>Show</b> reasons give the classifier something else to choose, so news or music isn't forced into a spoiler bucket. With no hide reasons, everything on-topic is hidden.</li>
       </ol>
     </section>
+
+    <details class="advanced" id="advanced">
+      <summary>
+        <span>Advanced</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </summary>
+      <div class="adv-body">
+        <div class="field">
+          <label for="server">Classifier address</label>
+          <div class="test-row">
+            <input id="server" class="text" type="url" spellcheck="false" autocomplete="off"
+                   placeholder="http://127.0.0.1:8765" aria-describedby="serverHelp">
+            <button id="testServer" class="btn" type="button">Test connection</button>
+          </div>
+          <small id="serverHelp">Where the local classifier listens: <code>http://127.0.0.1</code> or <code>http://localhost</code>, with an optional port. Saved when you leave the field. Empty means the default, <code>http://127.0.0.1:8765</code>.</small>
+          <div id="serverResult" class="result" role="status" aria-live="polite"></div>
+        </div>
+        <p class="adv-links"><a href="welcome.html">Setup guide</a></p>
+      </div>
+    </details>
   </main>
 
   <datalist id="kinds">

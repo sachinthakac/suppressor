@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Welcome to Suppressor</title>
+  <link rel="stylesheet" href="options.css">
+  <link rel="stylesheet" href="welcome.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="logo">🙈</span>
+      <div>
+        <h1>Welcome to Suppressor</h1>
+        <p>Blurs what you don't want to see. Everything is classified on your machine.</p>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section id="live" class="live waiting" aria-live="polite">
+      <span class="beacon" aria-hidden="true"></span>
+      <div class="live-text">
+        <b id="liveTitle">Waiting for the classifier…</b>
+        <span id="liveDetail">Checking <code id="addr">http://127.0.0.1:8765</code> every 3 seconds.</span>
+      </div>
+    </section>
+
+    <p class="intro">
+      Suppressor needs a small classifier server running on this computer. Keyword matches are
+      blurred without it, but deciding <em>why</em> an item is about your topic (spoilers or news?)
+      happens in the server. It takes two steps:
+    </p>
+
+    <ol class="steps">
+      <li class="step">
+        <span class="num">1</span>
+        <div>
+          <h2>Download the server bundle</h2>
+          <p>Get <code>suppressor-server-….zip</code> from the
+            <a href="https://github.com/sachinthakac/suppressor/releases/latest" target="_blank" rel="noopener">latest release</a>
+            and unzip it anywhere.</p>
+        </div>
+      </li>
+      <li class="step">
+        <span class="num">2</span>
+        <div>
+          <h2>Run the setup script</h2>
+          <p>It installs the classifier and starts it. The first run downloads the model (about 2.3 GB).</p>
+          <div class="os" id="os-win">
+            <span class="os-name">Windows</span>
+            <code class="cmd">powershell -ExecutionPolicy Bypass -File .\setup.ps1</code>
+          </div>
+          <div class="os" id="os-unix">
+            <span class="os-name">macOS / Linux</span>
+            <code class="cmd">bash setup.sh</code>
+          </div>
+        </div>
+      </li>
+      <li class="step" id="stepDone">
+        <span class="num">✓</span>
+        <div>
+          <h2>This page turns green</h2>
+          <p>As soon as the server answers. Then pick what to hide: GTA VI spoilers are set up
+            as an example.</p>
+        </div>
+      </li>
+    </ol>
+
+    <div class="actions">
+      <button id="options" class="btn">Choose topics</button>
+      <span class="hint">Running the server on another port? Change it under <a href="options.html#advanced" id="advLink">Options › Advanced</a>.</span>
+    </div>
+  </main>
+
+  <script src="shared.js"></script>
+  <script src="welcome.js"></script>
+</body>
+</html>

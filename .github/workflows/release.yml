@@ -1,0 +1,79 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      # Secrets can't be tested in `if:` directly; expose them as env and test that.
+      WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+      WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install web-ext
+        run: npm ci
+
+      - name: Check tag matches manifest version
+        id: version
+        run: |
+          version=$(node -p "require('./extension/manifest.json').version")
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$version" != "$tag" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match manifest version $version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Sign (unlisted)
+        if: env.WEB_EXT_API_KEY != '' && env.WEB_EXT_API_SECRET != ''
+        # web-ext reads WEB_EXT_API_KEY / WEB_EXT_API_SECRET from the environment.
+        run: npm run sign
+
+      - name: Collect release files
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mkdir -p dist
+          xpi=$(ls web-ext-artifacts/*.xpi 2>/dev/null | head -n 1 || true)
+          if [ -n "$xpi" ]; then
+            cp "$xpi" "dist/suppressor-$VERSION.xpi"
+          else
+            echo "::warning::AMO secrets not set; attaching the unsigned build (installable only in Developer Edition/Nightly or via about:debugging)."
+            zip=$(ls web-ext-artifacts/*.zip | head -n 1)
+            cp "$zip" "dist/suppressor-$VERSION-unsigned.zip"
+          fi
+
+          # Server bundle: only tracked files, so no venv, logs or caches.
+          paths=""
+          for p in server setup.ps1 setup.sh README.md; do
+            if [ -n "$(git ls-files -- "$p")" ]; then paths="$paths $p"; fi
+          done
+          git archive --format=zip --prefix="suppressor-server-$VERSION/" \
+            -o "dist/suppressor-server-$VERSION.zip" HEAD $paths
+          ls -l dist
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "Suppressor $GITHUB_REF_NAME" \
+            --generate-notes

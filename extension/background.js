@@ -2,7 +2,6 @@
 // content scripts and the options page (content scripts cannot fetch
 // 127.0.0.1 cross-origin under MV3).
 
-const DEFAULT_SERVER = "http://127.0.0.1:8765";
 const CACHE_MAX = 8000;
 const cache = new Map(); // `${sig}\0${text}` -> {match, cats}
 let defaultsPromise = null;
@@ -23,13 +22,25 @@ async function seed() {
     });
   }
 }
-browser.runtime.onInstalled.addListener(seed);
+browser.runtime.onInstalled.addListener((details) => {
+  seed();
+  if (details.reason === "install") browser.tabs.create({ url: browser.runtime.getURL("welcome.html") });
+});
 browser.runtime.onStartup.addListener(seed);
 seed();
 
 async function serverUrl() {
-  const { server } = await browser.storage.local.get({ server: DEFAULT_SERVER });
-  return server.replace(/\/$/, "");
+  const { server } = await browser.storage.local.get({ server: Sup.DEFAULT_SERVER });
+  return Sup.normalizeServer(server) || Sup.DEFAULT_SERVER;
+}
+
+// msg.server lets the options page test an address before saving it.
+async function health(server) {
+  const base = server == null ? await serverUrl() : Sup.normalizeServer(server);
+  if (!base) return { ok: false, error: "Use http://127.0.0.1 or http://localhost, with an optional port" };
+  const r = await fetch(`${base}/health`, { signal: AbortSignal.timeout(4000), cache: "no-store" });
+  if (!r.ok) return { ok: false, error: `server ${r.status}` };
+  return await r.json();
 }
 
 async function post(path, body) {
@@ -94,10 +105,8 @@ browser.runtime.onMessage.addListener(async (msg) => {
     switch (msg.type) {
       case "classify":
         return await classify(msg.texts, msg.topic);
-      case "health": {
-        const r = await fetch(`${await serverUrl()}/health`);
-        return await r.json();
-      }
+      case "health":
+        return await health(msg.server);
       case "validate": {
         const [def] = await enabledDefs(msg.topic);
         return await post("/validate", { topic: def });

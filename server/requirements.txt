@@ -1,3 +1,56 @@
-laya>=0.3.21
-fastapi>=0.115
-uvicorn>=0.34
+# Pinned, known-good versions for the Suppressor server (from a working venv).
+#
+# torch is NOT listed here on purpose: setup.ps1 / setup.sh install it first from
+# the right index (CUDA, CPU or default PyPI for macOS/MPS), and pip then keeps
+# that build. Installing it from here would pull the default wheel instead.
+# Its own dependencies (sympy, networkx, jinja2, ...) come with it.
+#
+# Manual install:  pip install torch --index-url https://download.pytorch.org/whl/<cu130|cu128|cu126|cpu>
+#                  pip install -r server/requirements.txt
+
+# direct
+laya==0.4.35
+fastapi==0.163.1
+uvicorn==0.54.0
+pydantic==2.14.3
+
+# laya / transformers / Hugging Face stack
+vegaml==0.16.3
+transformers==5.23.0
+huggingface_hub==2.4.0
+hf-xet==1.8.0
+safetensors==0.8.0
+tokenizers==0.23.3
+numpy==2.5.5
+regex==2026.11.15
+PyYAML==6.0.3
+tqdm==4.70.1
+filelock==4.2.4
+fsspec==2026.9.0
+packaging==26.3
+cryptography==50.0.2
+cffi==2.1.1
+pycparser==3.12
+httpx2==2.16.2
+httpcore2==2.16.2
+truststore==0.10.5
+idna==3.20
+typer==0.29.1
+rich==15.0.0
+markdown-it-py==4.3.0
+mdurl==0.1.2
+Pygments==2.21.0
+shellingham==1.5.4
+colorama==0.4.6
+
+# fastapi / uvicorn stack
+starlette==1.10.0
+pydantic_core==2.50.4
+annotated-types==0.8.0
+annotated-doc==0.0.6
+typing-inspection==0.4.5
+typing_extensions==4.16.0
+opentelemetry-api==1.45.2
+anyio==4.16.0
+h11==0.16.0
+click==8.5.1

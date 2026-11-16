@@ -4,3 +4,4 @@ __pycache__/
 web-ext-artifacts/
 node_modules/
 server/server.log*
+server/.onnx-cache/
