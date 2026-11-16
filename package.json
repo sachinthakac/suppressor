@@ -1,6 +1,6 @@
 {
   "name": "suppressor",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "Firefox extension that blurs content about topics you choose, using a local classifier.",
   "scripts": {

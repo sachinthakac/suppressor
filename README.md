@@ -141,3 +141,7 @@ blurred instantly everywhere, and the popup shows "slow" when the server reports
 same answers, but about 0.63x the speed of PyTorch, so it isn't used. The extension sends one
 request per tab at a time and never re-sends a title that's already waiting. The server re-checks
 its cache after waiting for the model, so several tabs don't classify the same titles twice.
+
+## Credits
+
+Icon: the see-no-evil monkey emoji from [OpenMoji](https://openmoji.org/) (CC BY-SA 4.0). See `extension/icons/ATTRIBUTION.md`.

@@ -1,14 +1,16 @@
 {
   "manifest_version": 3,
   "name": "Suppressor",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Blurs content about topics you choose (spoilers, leaks, gameplay...) using a local Laya classifier.",
   "browser_specific_settings": {
     "gecko": {
       "id": "suppressor@local",
       "strict_min_version": "121.0",
       "data_collection_permissions": {
-        "required": ["none"]
+        "required": [
+          "none"
+        ]
       }
     }
   },
@@ -51,10 +53,19 @@
   ],
   "action": {
     "default_title": "Suppressor",
-    "default_popup": "popup.html"
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon.svg",
+      "32": "icons/icon.svg"
+    }
   },
   "options_ui": {
     "page": "options.html",
     "open_in_tab": true
+  },
+  "icons": {
+    "48": "icons/icon.svg",
+    "96": "icons/icon.svg",
+    "128": "icons/icon.svg"
   }
 }
