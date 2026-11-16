@@ -1,30 +1,45 @@
 # Suppressor
 
-A Firefox extension that blurs spoilers on YouTube, Reddit and X. It starts with **GTA VI**.
-Text is classified locally by [Laya](https://github.com/NandhaKishorM/laya), a small
-on-device classifier. Nothing leaves your machine.
+A Firefox extension that blurs content about topics you choose (GTA VI out of the box) on YouTube,
+Reddit and X, **for the reasons you choose**. For example, hide GTA VI *spoilers, leaks, gameplay,
+endings* but keep *news, trailers, music* visible. Text is classified locally by
+[Laya](https://github.com/NandhaKishorM/laya), a small on-device classifier. Nothing leaves your machine.
 
 ```
  YouTube page ──► content.js ──► background.js ──► 127.0.0.1:8765 (server.py + Laya)
-   cards, comments,   keyword pre-filter       cache        "is this about GTA 6?"
-   the watched video  + blur / reveal                       "story / gameplay / trailer / news / music / meme?"
+   cards, comments,   keywords, veil UI   topics, cache    per topic: "is this about it?"
+   the watched video                                        + "which of your reasons fits?"
 ```
 
-## How a card is judged
+## Topics
+
+Edit topics on the options page (popup → **Manage topics**). Each topic has:
+
+| field | example | what it does |
+|---|---|---|
+| name / also known as | `GTA VI` / `GTA 6, Grand Theft Auto VI` | what the classifier looks for |
+| kind of thing | `video game` | contrasts with "another video game" and "not a video game", which noticeably improves matching |
+| keywords | `GTA 6`, `GTA VI` | always count as the topic; blurred instantly |
+| hints | `Lucia`, `Vice City` | blurred instantly, kept hidden only if the classifier agrees |
+| hide when it's about | `spoilers, ending, gameplay, leaks, explanation, nudity` | reasons to hide (empty = hide everything on-topic) |
+| always show | `news, trailer, music, meme` | reasons that are fine; they also give the classifier somewhere else to put such items |
+| thresholds | topic match 50%, hide at 40% | sensitivity |
+
+Reasons from the built-in library (`extension/defaults.json`) come with short descriptions for
+the classifier. Any other word you type works too and is used as its own description. Each topic
+has a **Test it** box: type a title and see the scores and verdict.
+
+## How an item is judged
 
 1. Its title, channel name or comment text is extracted (`extension/sites.js`).
-2. **Keyword pre-filter** (`extension/topics.js`). On a match the card is blurred *instantly*, so a
-   spoiler never flashes on screen. If the server is down, these cards stay blurred (fail closed).
-   - *strong* keywords (`GTA 6`, `GTA VI`, `Grand Theft Auto VI`) always count as on-topic.
-   - *ambiguous* ones (`Lucia`, `Vice City`, `Leonida`) need Laya to agree.
-3. **Laya** scores every snippet, including ones with no keyword, so oblique titles like
-   "the saddest death in the new Rockstar game" are also caught. One batched call per page.
-4. Modes (set in the popup):
-   - **only story / gameplay** (default): hide plot spoilers and gameplay footage, walkthroughs,
-     guides and leaks. Trailers, trailer reactions, news, music and memes stay visible.
-   - **everything about it**: hide anything on-topic.
-5. Clicking a blurred card reveals it. On a watch page, the player is blacked out and paused
-   until you click it.
+2. A keyword or hint match veils it instantly with a "Checking…" spinner, so nothing flashes on
+   screen. If the server is down, keyword matches stay hidden (fail closed).
+3. Laya scores every item against every enabled topic in one batched request: P(on-topic) plus a
+   probability for each hide/show reason.
+4. It's hidden when it's on-topic and its hide reasons add up past the threshold.
+5. The veil shows the topic and the top reasons. The chevron expands it into the scores, the
+   matched keyword and a **Show anyway** button. Hovering a veiled card doesn't start YouTube's
+   preview, and nothing under a veil can play. On a watch page, the player itself is veiled.
 
 ## Running it
 
@@ -43,25 +58,19 @@ developing, or sign it via AMO (unlisted) for permanent use.
 
 ## Accuracy
 
-`python server/eval_topics.py` runs the questions on 44 hand-labelled titles:
+`server/.venv/Scripts/python -I server/eval_topics.py` runs the default GTA VI topic over 44
+hand-labelled titles:
 
 | question | threshold | accuracy |
 |---|---|---|
-| on-topic (GTA VI vs other) | 0.5 | 95% (42/44) |
-| story/gameplay vs trailer/news/music/meme (GTA VI titles only) | 0.4 | 93% (28/30) |
+| on-topic (GTA VI vs other) | 0.5 | 91% (40/44) |
+| hide vs show (GTA VI titles only) | 0.4 | 90% (27/30) |
 
-Remaining misses include "Leonida full map leaked!" and "GTA 6: all 12 heists ranked" (spoilers
-scored as news/trailer). Explicit "GTA 6" titles that Laya scores low on topic are covered by the
-strong-keyword rule. The set is small, so **add real titles from your feed to `DATA` in
-`eval_topics.py`** and tune the thresholds in the popup.
+The classifier alone scores some explicit titles low ("GTA 6 ENDING EXPLAINED" got 0.32 on topic
+match). Keywords cover those. Older GTA games sometimes match GTA VI (San Andreas 0.64). The set is
+small, so **add real titles from your feed to `DATA` in `eval_topics.py`**.
 
-Note: Laya reads the option *keys* as well as their descriptions, so keep keys meaningful
-(`story_spoiler`, not `a`).
-
-## Adding a topic
-
-Add an entry to `server/topics.py` (`TOPICS`) and a matching keyword set in `extension/topics.js`
-with the same key.
+Laya reads option *keys* as well as their descriptions, so reasons should be meaningful words.
 
 ## Performance
 

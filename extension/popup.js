@@ -1,46 +1,57 @@
-const DEFAULTS = {
-  enabled: true,
-  topic: "gta6",
-  mode: "spoilers",
-  aboutThreshold: 0.5,
-  spoilerThreshold: 0.4,
-  paranoid: false,
-};
-
 const $ = (id) => document.getElementById(id);
 
-for (const [key, t] of Object.entries(SUPPRESSOR_TOPICS)) {
-  $("topic").add(new Option(t.name, key));
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
+    if (k === "style") Object.assign(el.style, v);
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (k in el && typeof v !== "string") el[k] = v;
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of kids.flat()) if (c != null && c !== false) el.append(c);
+  return el;
 }
 
-browser.storage.local.get(DEFAULTS).then((cfg) => {
-  for (const [k, v] of Object.entries(cfg)) {
-    const el = $(k);
-    if (!el) continue;
-    if (el.type === "checkbox") el.checked = v;
-    else el.value = v;
-    const out = document.querySelector(`output[for=${k}]`);
-    if (out) out.value = v;
-  }
-});
-
-document.querySelectorAll("input, select").forEach((el) => {
-  el.addEventListener("change", () => {
-    const v = el.type === "checkbox" ? el.checked : el.type === "range" ? Number(el.value) : el.value;
-    browser.storage.local.set({ [el.id]: v });
+async function render() {
+  const s = await browser.storage.local.get({ enabled: true, paranoid: false, topics: [] });
+  $("enabled").checked = s.enabled;
+  $("paranoid").checked = s.paranoid;
+  const list = $("topics");
+  list.replaceChildren();
+  if (!s.topics.length) list.append(h("div", { class: "empty" }, "No topics yet."));
+  s.topics.forEach((t, i) => {
+    const summary = t.suppress && t.suppress.length ? "Hides " + t.suppress.join(", ") : "Hides everything";
+    list.append(h("div", { class: "row" },
+      h("span", { class: "dot", style: { background: t.color || Sup.PALETTE[i % Sup.PALETTE.length] } }),
+      h("span", { class: "name" }, h("b", {}, t.name), h("span", { title: summary }, summary)),
+      h("label", { class: "switch", title: `Enable ${t.name}` },
+        h("input", {
+          type: "checkbox", checked: t.enabled !== false,
+          onchange: async (e) => {
+            const cur = (await browser.storage.local.get({ topics: [] })).topics;
+            const x = cur.find((y) => y.id === t.id);
+            if (x) x.enabled = e.target.checked;
+            browser.storage.local.set({ topics: cur });
+          },
+        }),
+        h("span"))));
   });
-  if (el.type === "range") {
-    el.addEventListener("input", () => (document.querySelector(`output[for=${el.id}]`).value = el.value));
+}
+
+$("enabled").addEventListener("change", (e) => browser.storage.local.set({ enabled: e.target.checked }));
+$("paranoid").addEventListener("change", (e) => browser.storage.local.set({ paranoid: e.target.checked }));
+$("manage").addEventListener("click", () => { browser.runtime.openOptionsPage(); window.close(); });
+
+browser.runtime.sendMessage({ type: "health" }).then((r) => {
+  const s = $("status");
+  if (r && r.ok) {
+    s.className = "status ok";
+    s.lastChild.textContent = `Classifier running (${r.device || "?"})`;
+  } else {
+    s.className = "status bad";
+    s.lastChild.textContent = "Classifier offline — keyword matches only. Run server/start.ps1";
   }
 });
 
-browser.runtime.sendMessage({ type: "health" }).then((h) => {
-  const s = $("status");
-  if (h && h.ok) {
-    s.textContent = "Laya server running";
-    s.className = "status ok";
-  } else {
-    s.textContent = "Server not reachable: only keyword matches are hidden. Run server/start.ps1";
-    s.className = "status bad";
-  }
-});
+render();

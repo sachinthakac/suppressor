@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Suppressor topics</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="logo">🙈</span>
+      <div>
+        <h1>Suppressor</h1>
+        <p>Choose what to hide. Everything is classified on your machine.</p>
+      </div>
+    </div>
+    <div class="globals">
+      <span id="status" class="status"><i></i><span>Checking classifier…</span></span>
+      <label class="toggle"><input type="checkbox" id="enabled"><span></span>Enabled</label>
+      <label class="toggle" title="Blur every item until it has been checked"><input type="checkbox" id="paranoid"><span></span>Paranoid</label>
+    </div>
+  </header>
+
+  <main>
+    <div id="topics"></div>
+    <button id="add" class="add">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      Add a topic
+    </button>
+    <section class="help">
+      <h2>How it decides</h2>
+      <ol>
+        <li><b>Keywords</b> blur an item instantly and always count as the topic. <b>Hints</b> blur instantly too, but the classifier must agree. Use <code>/regex/</code> for patterns.</li>
+        <li>Everything else is scored by the classifier: <em>is this about the topic?</em> and <em>which of your reasons fits it best?</em></li>
+        <li>An on-topic item is hidden when its <b>hide</b> reasons add up past the threshold. <b>Show</b> reasons give the classifier something else to choose, so news or music isn't forced into a spoiler bucket. With no hide reasons, everything on-topic is hidden.</li>
+      </ol>
+    </section>
+  </main>
+
+  <datalist id="kinds">
+    <option value="video game"><option value="TV show"><option value="movie"><option value="book series">
+    <option value="sports league"><option value="football team"><option value="band"><option value="anime">
+    <option value="election"><option value="product launch">
+  </datalist>
+
+  <script src="shared.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

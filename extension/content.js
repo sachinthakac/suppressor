@@ -1,88 +1,97 @@
 // Suppressor content script.
 //
-// Pipeline per item (video card, post, comment):
-//   1. extract a short text snippet
-//   2. keyword hit  -> blur immediately (fail closed: stays blurred if the server is down)
-//      no hit       -> visible, unless "paranoid" mode blurs everything until judged
-//   3. snippet is batched to the background script -> local Laya server
-//   4. verdict decides final state: blurred or revealed
-// YouTube recycles DOM nodes, so each element remembers the text it was judged on
-// (data-sup-sig) and is re-judged whenever that changes.
+// For every item (video card, post, comment) and for the page's own video:
+//   1. extract a short text snippet (sites.js)
+//   2. keyword/hint match for any topic -> veiled instantly ("pending")
+//   3. snippet batched to the background script -> local Laya server, which
+//      scores it against every enabled topic and its suppress/show reasons
+//   4. Sup.decide() per topic -> veiled with reasons ("hidden") or released
+// YouTube recycles DOM nodes, so each element remembers the text it was judged
+// on (data-sup-sig) and is re-judged whenever that changes.
 (() => {
   "use strict";
 
   const site = SUPPRESSOR_SITES.find((s) => s.match.test(location.hostname));
   if (!site) return;
 
-  const DEFAULTS = {
-    enabled: true,
-    topic: "gta6",
-    mode: "spoilers",        // "all": hide anything about the topic; "spoilers": only story/gameplay content
-    aboutThreshold: 0.5,
-    spoilerThreshold: 0.4,
-    paranoid: false,    // blur every item until the classifier has cleared it
-  };
-  let cfg = { ...DEFAULTS };
-  let topic = SUPPRESSOR_TOPICS[cfg.topic];
+  let enabled = true;
+  let paranoid = false;
+  let topics = []; // compiled, enabled only
 
-  const verdicts = new Map();  // text -> {about, spoiler} | "error"
-  const queue = new Set();     // texts awaiting classification
-  const inflight = new Set();  // texts sent, answer not back yet
+  const verdicts = new Map(); // text -> {r: {topicId: {match, cats}}, errors} | "error"
+  const queue = new Set();
+  const inflight = new Set();
   let flushTimer = null;
-  let busy = false;            // one request at a time per tab; the server is serial anyway
   let scanTimer = null;
+  let busy = false;
+
+  const VEILED = "[data-sup-state='hidden'],[data-sup-state='pending']";
 
   // ---- decisions ---------------------------------------------------------
 
-  const strongHit = (t) => topic.strong.some((re) => re.test(t));
-  const ambiguousHit = (t) => topic.ambiguous.some((re) => re.test(t));
-
-  function shouldHide(text, v) {
-    const strong = strongHit(text);
-    // No verdict yet, or the server is unreachable: fail closed on any keyword.
-    if (v === "error" || v === undefined) return strong || ambiguousHit(text) || cfg.paranoid;
-    const about =
-      strong ||
-      v.about >= cfg.aboutThreshold ||
-      (ambiguousHit(text) && v.about >= cfg.aboutThreshold - 0.15);
-    if (!about) return false;
-    return cfg.mode === "all" || v.spoiler >= cfg.spoilerThreshold;
+  function evaluate(text) {
+    const v = verdicts.get(text);
+    const hits = [];
+    const pend = [];
+    for (const t of topics) {
+      const r = v && v !== "error" ? v.r[t.id] : undefined;
+      const offline = v === "error" || !!(v && v.errors && v.errors[t.id]);
+      const d = Sup.decide(t, text, r, offline);
+      if (!d) continue;
+      (d.pending ? pend : hits).push(d);
+    }
+    if (hits.length) return { state: "hidden", hits };
+    if (pend.length || (paranoid && v === undefined && topics.length)) return { state: "pending", hits: pend };
+    return null;
   }
 
   // ---- DOM state ---------------------------------------------------------
 
-  function setState(el, state, reason) {
-    if (el.dataset.supRevealed === "1") state = "shown";
-    if (el.dataset.supState === state) return;
-    el.dataset.supState = state;          // "hidden" | "pending" | "shown"
-    if (reason) el.dataset.supReason = reason;
-    else delete el.dataset.supReason;
+  function apply(el, ev, kind) {
+    if (el.dataset.supRevealed === "1") ev = null;
+    const cur = el.dataset.supState;
+    if (!ev) {
+      if (cur === "hidden" || cur === "pending") {
+        el.dataset.supState = "shown";
+        delete el.dataset.supRender;
+        SupVeil.remove(el, true);
+      }
+      return;
+    }
+    const sig = ev.state + "|" + ev.hits.map((d) =>
+      d.topic.id + ":" + (d.reasons || []).map((r) => r.label + (r.p == null ? "" : r.p.toFixed(2))).join(",")).join(";");
+    const present = SupVeil.hostOf(el) || el.dataset.supFallback === "1";
+    if (cur === ev.state && el.dataset.supRender === sig && present) return;
+    el.dataset.supState = ev.state;
+    el.dataset.supRender = sig;
+    SupVeil.render(el, { ...ev, kind });
+    pauseMediaIn(el);
+  }
+
+  function pauseMediaIn(el) {
+    el.querySelectorAll("video, audio").forEach((m) => { if (!m.paused) m.pause(); });
+  }
+
+  function textOf(el) {
+    return (site.text(el) || "").replace(/\s+/g, " ").trim();
+  }
+
+  function need(text) {
+    if (topics.length && !verdicts.has(text) && !queue.has(text) && !inflight.has(text)) enqueue(text);
   }
 
   function judge(el) {
     // Nested matches (e.g. a lockup inside a rich-item): judge only the outermost.
     if (el.parentElement && el.parentElement.closest(site.items)) return;
-    const text = (site.text(el) || "").replace(/\s+/g, " ").trim();
+    const text = textOf(el);
     if (!text) return;
     if (el.dataset.supSig !== text) {
       el.dataset.supSig = text;
       delete el.dataset.supRevealed;
     }
-    const v = verdicts.get(text);
-    if (v === undefined) {
-      if (!queue.has(text) && !inflight.has(text)) enqueue(text);
-      setState(el, shouldHide(text, undefined) ? "pending" : "shown", `${topic.name} (checking…)`);
-      return;
-    }
-    if (shouldHide(text, v)) {
-      setState(el, "hidden", v === "error" ? `${topic.name} keyword` : label(v));
-    } else {
-      setState(el, "shown");
-    }
+    need(text);
+    apply(el, evaluate(text), "card");
   }
-
-  const label = (v) =>
-    `${topic.name} · ${Math.round(v.about * 100)}% topic · ${Math.round(v.spoiler * 100)}% spoiler`;
 
   // ---- page-level (the video being watched) -------------------------------
 
@@ -92,23 +101,22 @@
     const title = site.pageTitle();
     const player = site.player && document.querySelector(site.player);
     if (!title || !player) return;
+    const extras = site.pageExtras ? [...document.querySelectorAll(site.pageExtras)] : [];
     if (title !== pageSig) {
       pageSig = title;
-      delete player.dataset.supRevealed;
-      if (site.pageExtras) document.querySelectorAll(site.pageExtras).forEach((x) => delete x.dataset.supRevealed);
+      for (const x of [player, ...extras]) delete x.dataset.supRevealed;
     }
-    const v = verdicts.get(title);
-    if (v === undefined && !queue.has(title) && !inflight.has(title)) enqueue(title);
-    const hide = shouldHide(title, v);
-    const targets = [player, ...(site.pageExtras ? document.querySelectorAll(site.pageExtras) : [])];
-    for (const t of targets) {
-      if (t === player && player.dataset.supRevealed === "1") { setState(t, "shown"); continue; }
-      setState(t, hide ? (v === undefined ? "pending" : "hidden") : "shown",
-        hide ? (v && v !== "error" ? label(v) : `${topic.name}`) : null);
-    }
-    if (hide && player.dataset.supRevealed !== "1") {
-      const video = player.querySelector("video");
-      if (video && !video.paused) video.pause();
+    need(title);
+    const ev = evaluate(title);
+    apply(player, ev, "player");
+    for (const x of extras) apply(x, ev, "mini");
+  }
+
+  function reveal(el) {
+    el.dataset.supRevealed = "1";
+    apply(el, null);
+    if (site.player && el.matches(site.player) && site.pageExtras) {
+      document.querySelectorAll(site.pageExtras).forEach((x) => { x.dataset.supRevealed = "1"; apply(x, null); });
     }
   }
 
@@ -116,7 +124,7 @@
 
   function enqueue(text) {
     queue.add(text);
-    if (!flushTimer && !busy) flushTimer = setTimeout(flush, 120);
+    if (!flushTimer && !busy) flushTimer = setTimeout(flush, 80);
   }
 
   async function flush() {
@@ -127,20 +135,18 @@
     texts.forEach((t) => { queue.delete(t); inflight.add(t); });
     let res;
     try {
-      res = await browser.runtime.sendMessage({ type: "classify", topic: cfg.topic, texts });
+      res = await browser.runtime.sendMessage({ type: "classify", texts });
     } catch (e) {
       res = { error: String(e) };
     }
-    let failed = false;
+    const ok = res && Array.isArray(res.results);
     texts.forEach((t, i) => {
       inflight.delete(t);
-      const r = res && res.results && res.results[i];
-      if (!r) failed = true;
-      verdicts.set(t, r || "error");
+      verdicts.set(t, ok ? { r: res.results[i] || {}, errors: res.errors || {} } : "error");
     });
     busy = false;
-    if (failed) {
-      // Server down or erroring: keep keyword hits blurred, retry in a while.
+    if (!ok) {
+      // Server down: keyword hits stay veiled ("classifier offline"); retry later.
       setTimeout(() => {
         for (const [t, v] of verdicts) if (v === "error") verdicts.delete(t);
         scheduleScan();
@@ -154,51 +160,86 @@
 
   function scan() {
     scanTimer = null;
-    if (!cfg.enabled) return;
+    if (!enabled) return;
     document.querySelectorAll(site.items).forEach(judge);
     judgePage();
   }
 
   function scheduleScan() {
-    if (!scanTimer) scanTimer = setTimeout(scan, 60);
+    if (!scanTimer) scanTimer = setTimeout(scan, 50);
   }
 
-  function clearAll() {
-    document.querySelectorAll("[data-sup-state]").forEach((el) => {
-      delete el.dataset.supState;
-      delete el.dataset.supReason;
+  function resetAll() {
+    document.querySelectorAll("[data-sup-state],[data-sup-revealed],[data-sup-fallback]").forEach((el) => {
+      SupVeil.remove(el, false);
+      for (const k of ["supState", "supRender", "supRevealed", "supFallback", "supLabel"]) delete el.dataset[k];
     });
   }
 
-  // Click on a hidden item reveals it instead of following the link.
+  // ---- interaction -------------------------------------------------------
+
+  // Clicks anywhere on a veiled card never reach the page (no navigation).
+  // Buttons inside the veil carry data-act; composedPath() sees into its open shadow root.
   document.addEventListener("click", (e) => {
-    const el = e.target.closest && e.target.closest("[data-sup-state='hidden'],[data-sup-state='pending']");
-    if (!el) return;
+    const path = e.composedPath();
+    const card = path.find((n) => n instanceof Element && (n.dataset.supState === "hidden" || n.dataset.supState === "pending"));
+    // Clicking anywhere else closes open detail panels.
+    document.querySelectorAll("." + SupVeil.HOST_CLASS + "[data-open]").forEach((v) => {
+      if (v.parentElement !== card) SupVeil.toggle(v.parentElement, false);
+    });
+    if (!card) return;
     e.preventDefault();
-    e.stopPropagation();
-    el.dataset.supRevealed = "1";
-    setState(el, "shown");
-    if (site.pageExtras && el.matches(site.player)) {
-      document.querySelectorAll(site.pageExtras).forEach((x) => { x.dataset.supRevealed = "1"; setState(x, "shown"); });
+    e.stopImmediatePropagation();
+    if (card.dataset.supFallback === "1") {
+      if (card.dataset.supState === "hidden") reveal(card);
+      return;
     }
+    const actEl = path.find((n) => n instanceof Element && n.dataset && n.dataset.act);
+    const act = actEl ? actEl.dataset.act : "toggle";
+    if (act === "reveal") reveal(card);
+    else SupVeil.toggle(card);
   }, true);
 
+  // No autoplay under a veil: swallow hover events over veiled items (YouTube's
+  // inline preview starts on hover) and pause anything that plays inside one.
+  let hoveringVeiled = false;
+  for (const type of ["mouseover", "mouseenter", "mousemove", "pointerover", "pointerenter", "pointermove", "focusin"]) {
+    window.addEventListener(type, (e) => {
+      const veiled = e.target instanceof Element && e.target.closest(VEILED);
+      if (type === "mouseover" || type === "pointerover") hoveringVeiled = !!veiled;
+      if (veiled) e.stopImmediatePropagation();
+    }, true);
+  }
+  document.addEventListener("play", (e) => {
+    const m = e.target;
+    if (!(m instanceof HTMLMediaElement)) return;
+    const preview = hoveringVeiled && m.closest("#video-preview, ytd-video-preview, #inline-preview-player");
+    if (m.closest(VEILED) || preview) m.pause();
+  }, true);
+
+  // ---- wiring ------------------------------------------------------------
+
   new MutationObserver(scheduleScan).observe(document.documentElement, {
-    childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["title", "aria-label", "post-title"],
+    childList: true, subtree: true, characterData: true, attributes: true,
+    attributeFilter: ["title", "aria-label", "post-title"],
   });
   document.addEventListener("yt-navigate-finish", scheduleScan);
 
-  browser.storage.local.get(DEFAULTS).then((s) => {
-    cfg = { ...DEFAULTS, ...s };
-    topic = SUPPRESSOR_TOPICS[cfg.topic] || SUPPRESSOR_TOPICS.gta6;
+  function load(s) {
+    enabled = s.enabled !== false;
+    paranoid = !!s.paranoid;
+    topics = (s.topics || []).filter((t) => t.enabled !== false && t.name).map(Sup.compileTopic);
+  }
+
+  browser.storage.local.get({ enabled: true, paranoid: false, topics: [] }).then((s) => {
+    load(s);
     scheduleScan();
   });
-  browser.storage.onChanged.addListener((changes) => {
-    for (const [k, { newValue }] of Object.entries(changes)) cfg[k] = newValue;
-    topic = SUPPRESSOR_TOPICS[cfg.topic] || SUPPRESSOR_TOPICS.gta6;
-    if (changes.topic) verdicts.clear();
-    clearAll();
-    document.querySelectorAll("[data-sup-revealed]").forEach((el) => delete el.dataset.supRevealed);
+  browser.storage.onChanged.addListener(async (changes) => {
+    const s = await browser.storage.local.get({ enabled: true, paranoid: false, topics: [] });
+    load(s);
+    if (changes.topics) verdicts.clear();
+    resetAll();
     scheduleScan();
   });
   scheduleScan();

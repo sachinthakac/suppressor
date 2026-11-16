@@ -1,41 +1,77 @@
+/*
+ * Light-DOM side of the veil. The veil itself (glass + pill + details) lives in
+ * a shadow root injected by veil.js; this file only positions things and
+ * provides a pseudo-element fallback for hosts whose shadow DOM hides injected
+ * children (data-sup-fallback).
+ */
+
 [data-sup-state="hidden"],
 [data-sup-state="pending"] {
   position: relative !important;
-  cursor: pointer !important;
 }
 
-[data-sup-state="hidden"] > *,
-[data-sup-state="pending"] > * {
-  filter: blur(18px) saturate(0.3) !important;
+/* Nothing under the veil reacts to the mouse (no hover previews, no tooltips). */
+[data-sup-state="hidden"] > :not(.sup-veil),
+[data-sup-state="pending"] > :not(.sup-veil) {
   pointer-events: none !important;
   user-select: none !important;
 }
 
-[data-sup-state="hidden"]::after,
-[data-sup-state="pending"]::after {
-  content: "🙈 " attr(data-sup-reason) " — click to reveal";
+/* The main player: hide the picture entirely, not just blur it. */
+[data-sup-state="hidden"] > video,
+[data-sup-state="pending"] > video,
+#movie_player[data-sup-state="hidden"] video,
+#movie_player[data-sup-state="pending"] video,
+#player-container[data-sup-state="hidden"] video,
+#player-container[data-sup-state="pending"] video {
+  opacity: 0 !important;
+}
+
+/* ---- fallback: pseudo-element veil ------------------------------------- */
+
+[data-sup-fallback="1"][data-sup-state="hidden"],
+[data-sup-fallback="1"][data-sup-state="pending"] {
+  cursor: pointer !important;
+  isolation: isolate;
+}
+
+[data-sup-fallback="1"][data-sup-state="hidden"]::after,
+[data-sup-fallback="1"][data-sup-state="pending"]::after {
+  content: "";
   position: absolute;
   inset: 0;
   z-index: 2147483000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px;
-  text-align: center;
-  font: 600 13px/1.3 system-ui, sans-serif;
-  color: #fff;
-  background: rgba(20, 20, 24, 0.55);
   border-radius: 12px;
+  pointer-events: none;
+  backdrop-filter: blur(11px) saturate(1.15) brightness(0.5);
+  background: rgba(10, 10, 14, 0.2);
+}
+
+[data-sup-fallback="1"][data-sup-state="hidden"]::before,
+[data-sup-fallback="1"][data-sup-state="pending"]::before {
+  content: attr(data-sup-label);
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 2147483001;
+  transform: translate(-50%, -50%);
+  max-width: calc(100% - 24px);
+  padding: 8px 16px;
+  border-radius: 18px;
+  background: rgba(20, 20, 24, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  color: #f6f6f8;
+  font: 600 13px/1.4 system-ui, sans-serif;
+  text-align: center;
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
   pointer-events: none;
 }
 
-[data-sup-state="pending"]::after {
-  content: "🙈 checking…";
-  background: rgba(20, 20, 24, 0.35);
-}
-
-/* The main player: hide the picture completely rather than blur it. */
-#movie_player[data-sup-state="hidden"] video,
-#movie_player[data-sup-state="pending"] video {
-  opacity: 0 !important;
+@supports not (backdrop-filter: blur(1px)) {
+  [data-sup-state="hidden"] > :not(.sup-veil),
+  [data-sup-state="pending"] > :not(.sup-veil) {
+    filter: blur(11px) brightness(0.6) !important;
+  }
 }

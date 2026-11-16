@@ -2,7 +2,8 @@
 
     python server/eval_topics.py
 
-Labels: (text, is_about_gta6, is_spoiler). Extend this list with real titles
+Uses the default GTA VI topic from extension/defaults.json.
+Labels: (text, is_about_gta6, should_be_suppressed). Extend this list with real titles
 you see in your feed - it is the cheapest way to improve the questions.
 """
 import os
@@ -13,7 +14,11 @@ os.environ.setdefault("USE_TF", "0")
 sys.path.insert(0, os.path.dirname(__file__))
 
 import laya  # noqa: E402
-from topics import build_questions, summarise  # noqa: E402
+import json  # noqa: E402
+
+from topics import build_questions, resolve_topic, slug, summarise  # noqa: E402
+
+DEFAULTS = os.path.join(os.path.dirname(__file__), "..", "extension", "defaults.json")
 
 DATA = [
     # about GTA6, spoiler = story or gameplay content -> hide
@@ -66,11 +71,25 @@ DATA = [
 ]
 
 
+def load_topic(topic_id="gta6"):
+    with open(DEFAULTS, encoding="utf-8") as f:
+        d = json.load(f)
+    topic = next(t for t in d["topics"] if t["id"] == topic_id)
+    return topic, resolve_topic(topic, d["categories"])
+
+
+def scores(topic, answers):
+    sm = summarise(answers)
+    sup = {slug(x) for x in topic["suppress"]}
+    return sm["match"], sum(p for k, p in sm["cats"].items() if k in sup), sm["cats"]
+
+
 def main():
+    topic, defn = load_topic()
     t = time.time()
     agent = laya.load("convaiinnovations/laya")
     print(f"loaded in {time.time()-t:.1f}s")
-    q = build_questions("gta6")
+    q = build_questions(defn)
     texts = [d[0] for d in DATA]
     agent.predict_batch(texts[:2], q)
     t = time.time()
@@ -78,20 +97,24 @@ def main():
     dt = (time.time() - t) * 1000
     print(f"{len(texts)} titles in {dt:.0f} ms ({dt/len(texts):.1f} ms/title)\n")
 
-    print(f"{'about':>6} {'spoil':>6}  lbl  title")
+    mt, st = topic["matchThreshold"], topic["suppressThreshold"]
+    print(f"{'match':>6} {'supp':>6}  lbl  top-category  title")
     for (text, a, s), r in zip(DATA, out):
-        sm = summarise(r["answers"])
-        pa, ps = sm["about"], sm["spoiler"]
-        mark = "" if (pa >= 0.5) == bool(a) else "  <-- about wrong"
-        print(f"{pa:6.2f} {ps:6.2f}  {a}{s}   {text[:60]}{mark}")
+        m, sp, cats = scores(topic, r["answers"])
+        top = max(cats, key=cats.get)
+        mark = "" if (m >= mt) == bool(a) else "  <-- match wrong"
+        if a and (sp >= st) != bool(s):
+            mark += "  <-- suppress wrong"
+        print(f"{m:6.2f} {sp:6.2f}  {a}{s}   {top:12s}  {text[:55]}{mark}")
 
-    for name, idx in (("about", 1), ("spoiler", 2)):
-        rows = DATA if name == "about" else [d for d in DATA if d[1]]
-        outs = out if name == "about" else [o for d, o in zip(DATA, out) if d[1]]
-        key = "about" if name == "about" else "spoiler"
-        for thr in ((0.4, 0.5, 0.6) if name == "about" else (0.3, 0.4, 0.5)):
-            acc = sum((summarise(o["answers"])[key] >= thr) == bool(d[idx]) for d, o in zip(rows, outs)) / len(rows)
-            print(f"{name:8s} thr={thr}: acc {acc:.0%} (n={len(rows)})")
+    allm = [scores(topic, o["answers"]) for o in out]
+    for thr in (0.4, 0.5, 0.6):
+        acc = sum((m >= thr) == bool(d[1]) for d, (m, _, _) in zip(DATA, allm)) / len(DATA)
+        print(f"match    thr={thr}: acc {acc:.0%} (n={len(DATA)})")
+    rows = [(d, x) for d, x in zip(DATA, allm) if d[1]]
+    for thr in (0.3, 0.4, 0.5):
+        acc = sum((x[1] >= thr) == bool(d[2]) for d, x in rows) / len(rows)
+        print(f"suppress thr={thr}: acc {acc:.0%} (n={len(rows)})")
 
 
 if __name__ == "__main__":

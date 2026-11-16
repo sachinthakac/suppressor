@@ -1,0 +1,41 @@
+{
+  "categories": {
+    "spoilers": "reveals the plot, story events, deaths or twists",
+    "ending": "explains or shows the ending",
+    "gameplay": "shows playing it: let's play, missions, playthrough",
+    "walkthrough": "walkthrough, guide, tips or 100% completion",
+    "leaks": "leaked footage, leaked map or insider leaks",
+    "explanation": "explains details, lore or breakdowns",
+    "theories": "fan theories or predictions",
+    "map": "the map, locations or hidden secrets",
+    "characters": "characters' fates or relationships",
+    "nudity": "nudity, sexual or explicit content",
+    "violence": "graphic violence or gore",
+    "news": "news: release date, delay, price, sales, earnings",
+    "trailer": "an official trailer or teaser, or reacting to one",
+    "music": "music, soundtrack or songs",
+    "meme": "meme, joke or funny clip",
+    "opinion": "opinion, hype or discussion",
+    "review": "a review or verdict",
+    "hardware": "consoles, PC specs, bundles or unboxing",
+    "reaction": "a reaction video",
+    "interview": "an interview with the creators",
+    "scores": "match result, score or who won",
+    "highlights": "match highlights or key moments"
+  },
+  "topics": [
+    {
+      "id": "gta6",
+      "name": "GTA VI",
+      "enabled": true,
+      "description": "GTA 6, Grand Theft Auto VI",
+      "kind": "video game",
+      "keywords": ["GTA 6", "GTA VI", "GTA6", "Grand Theft Auto VI", "Grand Theft Auto 6"],
+      "hints": ["Leonida", "Vice City", "Lucia", "Port Gellhorn"],
+      "suppress": ["spoilers", "ending", "gameplay", "leaks", "explanation", "nudity"],
+      "show": ["news", "trailer", "music", "meme"],
+      "matchThreshold": 0.5,
+      "suppressThreshold": 0.4
+    }
+  ]
+}

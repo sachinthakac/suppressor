@@ -1,60 +1,111 @@
-// Proxies classification requests from content scripts to the local Laya server
-// (content scripts cannot fetch 127.0.0.1 cross-origin under MV3) and keeps a
-// small in-memory cache so revisiting a page costs nothing.
+// Owns the topic config and talks to the local Laya server on behalf of
+// content scripts and the options page (content scripts cannot fetch
+// 127.0.0.1 cross-origin under MV3).
 
 const DEFAULT_SERVER = "http://127.0.0.1:8765";
-const cache = new Map(); // `${topic}\0${text}` -> result
-const CACHE_MAX = 5000;
+const CACHE_MAX = 8000;
+const cache = new Map(); // `${sig}\0${text}` -> {match, cats}
+let defaultsPromise = null;
+
+function defaults() {
+  if (!defaultsPromise) {
+    defaultsPromise = fetch(browser.runtime.getURL("defaults.json")).then((r) => r.json());
+  }
+  return defaultsPromise;
+}
+
+async function seed() {
+  const { topics } = await browser.storage.local.get("topics");
+  if (!Array.isArray(topics)) {
+    const d = await defaults();
+    await browser.storage.local.set({
+      topics: d.topics.map((t, i) => ({ color: Sup.PALETTE[i % Sup.PALETTE.length], ...t })),
+    });
+  }
+}
+browser.runtime.onInstalled.addListener(seed);
+browser.runtime.onStartup.addListener(seed);
+seed();
 
 async function serverUrl() {
   const { server } = await browser.storage.local.get({ server: DEFAULT_SERVER });
   return server.replace(/\/$/, "");
 }
 
-async function classify(topic, texts) {
-  const results = new Array(texts.length);
-  const missing = [];
-  texts.forEach((t, i) => {
-    const hit = cache.get(`${topic}\0${t}`);
-    if (hit) results[i] = hit;
-    else missing.push(i);
+async function post(path, body) {
+  const resp = await fetch(`${await serverUrl()}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
   });
-  if (missing.length) {
-    const resp = await fetch(`${await serverUrl()}/classify`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ topic, texts: missing.map((i) => texts[i]) }),
+  if (!resp.ok) throw new Error(`server ${resp.status}: ${(await resp.text()).slice(0, 200)}`);
+  return resp.json();
+}
+
+async function enabledDefs(onlyTopic) {
+  const d = await defaults();
+  let topics;
+  if (onlyTopic) topics = [onlyTopic];
+  else ({ topics = [] } = await browser.storage.local.get("topics"));
+  return topics
+    .filter((t) => onlyTopic || t.enabled !== false)
+    .filter((t) => t.name && t.name.trim())
+    .map((t) => Sup.resolveTopic(t, d.categories));
+}
+
+const sigOf = (def) => JSON.stringify([def.name, def.description, def.kind, def.categories]);
+
+// -> {results: [{topicId: {match, cats}}], errors: {topicId: msg}}
+async function classify(texts, onlyTopic) {
+  const defs = await enabledDefs(onlyTopic);
+  const results = texts.map(() => ({}));
+  const errors = {};
+  const need = []; // [def, [textIdx...]]
+  for (const def of defs) {
+    const sig = sigOf(def);
+    const missing = [];
+    texts.forEach((t, i) => {
+      const hit = cache.get(`${sig}\0${t}`);
+      if (hit) results[i][def.id] = hit;
+      else missing.push(i);
     });
-    if (!resp.ok) throw new Error(`server ${resp.status}`);
-    const data = await resp.json();
-    if (!data.results) throw new Error(data.error || "bad response");
-    missing.forEach((i, j) => {
-      results[i] = data.results[j];
-      cache.set(`${topic}\0${texts[i]}`, data.results[j]);
+    if (missing.length) need.push([def, missing]);
+  }
+  if (need.length) {
+    // One request: every topic that has misses, over the union of missing texts.
+    const idx = [...new Set(need.flatMap(([, m]) => m))].sort((a, b) => a - b);
+    const data = await post("/classify", { topics: need.map(([d]) => d), texts: idx.map((i) => texts[i]) });
+    Object.assign(errors, data.errors || {});
+    idx.forEach((i, j) => {
+      for (const [def] of need) {
+        const r = data.results[j][def.id];
+        if (!r) continue;
+        results[i][def.id] = r;
+        cache.set(`${sigOf(def)}\0${texts[i]}`, r);
+      }
     });
     while (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value);
   }
-  return results;
+  return { results, errors };
 }
 
 browser.runtime.onMessage.addListener(async (msg) => {
-  if (msg.type === "classify") {
-    try {
-      return { results: await classify(msg.topic, msg.texts) };
-    } catch (e) {
-      return { error: String(e) };
+  try {
+    switch (msg.type) {
+      case "classify":
+        return await classify(msg.texts, msg.topic);
+      case "health": {
+        const r = await fetch(`${await serverUrl()}/health`);
+        return await r.json();
+      }
+      case "validate": {
+        const [def] = await enabledDefs(msg.topic);
+        return await post("/validate", { topic: def });
+      }
+      case "defaults":
+        return await defaults();
     }
-  }
-  if (msg.type === "health") {
-    try {
-      const r = await fetch(`${await serverUrl()}/health`);
-      return await r.json();
-    } catch (e) {
-      return { ok: false, error: String(e) };
-    }
-  }
-  if (msg.type === "clearCache") {
-    cache.clear();
-    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e) };
   }
 });
