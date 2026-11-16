@@ -415,7 +415,7 @@ function showStatus(r) {
   const hs = Sup.describeHealth(r);
   s.className = "status " + (hs.ok ? (hs.slow ? "ok slow" : "ok") : "bad");
   s.querySelector("span").textContent = hs.text;
-  s.title = hs.slow ? "Classification is slow on this machine. Only items near the screen are checked." : "";
+  s.title = hs.slow ? "Classification is slow on this machine. Only items near the screen are checked." : "Click for server controls";
 }
 const refreshStatus = () => health().then(showStatus);
 
@@ -476,6 +476,62 @@ $("testServer").addEventListener("click", async () => {
       r && r.error ? r.error.replace(/^\w*Error:\s*/, "") : "Is the server running? See the setup guide.");
   }
 });
+
+// ---- start / stop / restart (through the native helper) ----------------------
+
+const svcButtons = [...document.querySelectorAll(".svc-row [data-cmd]")];
+const BUSY = { start: "Starting…", stop: "Stopping…", restart: "Restarting…" };
+const svcResult = (cls, label, detail) => $("svcResult").replaceChildren(
+  h("span", { class: "conn " + cls }, label),
+  detail ? h("span", { class: "conn-detail" }, detail) : null);
+const HELPER_MISSING = "Run the setup script again from the server folder (setup.ps1 on Windows, setup.sh on macOS/Linux), " +
+  "or just server/native/install-native-host, then reload this page.";
+
+function setRunning(running) {
+  for (const b of svcButtons) b.disabled = b.dataset.cmd === "start" ? running : !running;
+}
+
+async function waitForHealth(ms) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    const r = await health();
+    if (r && r.ok) return r;
+    await new Promise((res) => setTimeout(res, 1500));
+  }
+  return null;
+}
+
+async function runService(cmd) {
+  svcButtons.forEach((b) => (b.disabled = true));
+  svcResult("", BUSY[cmd]);
+  const r = await browser.runtime.sendMessage({ type: "service", cmd }).catch((e) => ({ ok: false, error: String(e) }));
+  if (r.helperMissing) {
+    svcResult("bad", "The Firefox helper isn't installed", HELPER_MISSING);
+  } else if (!r.ok) {
+    svcResult("bad", `Couldn't ${cmd} the server`, r.error || "");
+  } else if (cmd === "stop") {
+    svcResult("", "Stopped", r.service ? `Stopped the ${r.service} service until you start it again or log in.` : "");
+  } else {
+    svcResult("", "Loading the model…", "This takes 10–30 seconds.");
+    const hr = await waitForHealth(120000);
+    if (hr) svcResult("ok", cmd === "restart" ? "Restarted" : "Running", Sup.describeHealth(hr).detail);
+    else svcResult("bad", "Started, but it isn't answering yet", "Check server.log in the server folder.");
+  }
+  const now = await health();
+  showStatus(now);
+  setRunning(!!(now && now.ok));
+}
+
+svcButtons.forEach((b) => b.addEventListener("click", () => runService(b.dataset.cmd)));
+
+$("status").addEventListener("click", () => {
+  $("advanced").open = true;
+  $("advanced").scrollIntoView({ behavior: "smooth", block: "start" });
+});
+health().then((r) => setRunning(!!(r && r.ok)));
+browser.runtime.sendMessage({ type: "service", cmd: "status" }).then((r) => {
+  if (r && r.helperMissing) svcResult("bad", "The Firefox helper isn't installed", HELPER_MISSING);
+}).catch(() => {});
 
 browser.storage.local.get({ server: Sup.DEFAULT_SERVER }).then(({ server }) => {
   serverInput.value = Sup.normalizeServer(server) || Sup.DEFAULT_SERVER;

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Suppressor",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Blurs content about topics you choose (spoilers, leaks, gameplay...) using a local Laya classifier.",
   "browser_specific_settings": {
     "gecko": {
@@ -15,7 +15,8 @@
     }
   },
   "permissions": [
-    "storage"
+    "storage",
+    "nativeMessaging"
   ],
   "host_permissions": [
     "http://127.0.0.1/*",

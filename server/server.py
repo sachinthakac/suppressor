@@ -47,13 +47,13 @@ sys.path.insert(0, HERE)
 
 import laya  # noqa: E402
 import uvicorn  # noqa: E402
-from fastapi import FastAPI  # noqa: E402
+from fastapi import FastAPI, HTTPException, Request  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
 from topics import build_questions, signature, summarise  # noqa: E402
 
-SERVER_VERSION = "0.3.0"
+SERVER_VERSION = "0.4.0"
 HOST = "127.0.0.1"
 PORT = int(os.environ.get("SUPPRESSOR_PORT", "8765"))
 MODEL_ID = os.environ.get("SUPPRESSOR_MODEL", "convaiinnovations/laya")
@@ -209,6 +209,24 @@ def validate(req: ValidateRequest):
         return {"ok": False, "error": str(e)}
 
 
+# log_config=None: keep uvicorn on our logging setup (and the log file under pythonw).
+_server = uvicorn.Server(uvicorn.Config(app, host=HOST, port=PORT, log_level="warning", log_config=None))
+
+
+@app.post("/shutdown")
+def shutdown(request: Request):
+    """Used by the Firefox helper (server/native) to stop a server it can't stop otherwise.
+
+    The custom header forces a CORS preflight, which only extension origins pass, so
+    ordinary web pages can't shut the server down with a simple cross-site POST.
+    """
+    origin = request.headers.get("origin")
+    if request.headers.get("x-suppressor") != "shutdown" or (origin and not origin.startswith("moz-extension://")):
+        raise HTTPException(status_code=403, detail="forbidden")
+    log.info("shutdown requested")
+    _server.should_exit = True
+    return {"ok": True}
+
+
 if __name__ == "__main__":
-    # log_config=None: keep uvicorn on our logging setup (and the log file under pythonw).
-    uvicorn.run(app, host=HOST, port=PORT, log_level="warning", log_config=None)
+    _server.run()

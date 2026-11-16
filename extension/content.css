@@ -43,8 +43,7 @@
   z-index: 2147483000;
   border-radius: 12px;
   pointer-events: none;
-  backdrop-filter: blur(11px) saturate(1.15) brightness(0.5);
-  background: rgba(10, 10, 14, 0.2);
+  backdrop-filter: blur(11px) saturate(1.15);
 }
 
 [data-sup-fallback="1"][data-sup-state="hidden"]::before,
@@ -72,6 +71,6 @@
 @supports not (backdrop-filter: blur(1px)) {
   [data-sup-state="hidden"] > :not(.sup-veil),
   [data-sup-state="pending"] > :not(.sup-veil) {
-    filter: blur(11px) brightness(0.6) !important;
+    filter: blur(11px) !important;
   }
 }

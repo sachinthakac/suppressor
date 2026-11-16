@@ -43,6 +43,17 @@ async function health(server) {
   return await r.json();
 }
 
+// Start/stop/restart go through the native helper (server/native), which setup
+// registers with Firefox. Without it the call fails and the page explains how to add it.
+async function service(cmd) {
+  const port = Number(new URL(await serverUrl()).port) || 80;
+  try {
+    return await browser.runtime.sendNativeMessage("suppressor", { cmd, port });
+  } catch (e) {
+    return { ok: false, helperMissing: true, error: String(e && e.message || e) };
+  }
+}
+
 async function post(path, body) {
   const resp = await fetch(`${await serverUrl()}${path}`, {
     method: "POST",
@@ -111,6 +122,8 @@ browser.runtime.onMessage.addListener(async (msg) => {
         const [def] = await enabledDefs(msg.topic);
         return await post("/validate", { topic: def });
       }
+      case "service":
+        return await service(msg.cmd);
       case "defaults":
         return await defaults();
     }

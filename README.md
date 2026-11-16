@@ -95,6 +95,17 @@ LaunchAgent and on Linux a systemd user service, both restarted on failure. Logs
 `server/server.log`. Don't also run `start.ps1`, because both use port 8765. The macOS and Linux
 installers have only been tested with simulated systems so far.
 
+### Start, stop and restart from Firefox
+
+**Options → Advanced → Classifier server** has Start, Stop and Restart buttons. Clicking the
+status in the page header jumps there. They work through a small helper that Firefox is
+allowed to run (`server/native/native_host.py`, via native messaging). `setup` registers it
+for your user. To register it by hand: `server/native/install-native-host.ps1` on Windows, or
+`server/native/install-native-host.sh` on macOS/Linux. If the server is installed as an auto-start
+service, the helper starts and stops that service. Otherwise it launches `server.py` in the
+background and stops it through the server's `/shutdown` endpoint. Only the helper and the
+extension can call that endpoint.
+
 ## Releasing
 
 ```bash

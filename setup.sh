@@ -268,6 +268,13 @@ if [ "$do_auto" = 1 ]; then
     fi
 fi
 
+# ---- 9. Firefox helper ---------------------------------------------------------
+say "Firefox helper (start/stop/restart from the extension's settings)"
+NATIVE_SCRIPT="$SERVER_DIR/native/install-native-host.sh"
+if [ "$DRY_RUN" = 1 ]; then plan "run $NATIVE_SCRIPT --venv $VENV"
+else bash "$NATIVE_SCRIPT" --venv "$VENV" || warn "Could not register the Firefox helper."
+fi
+
 # ---- done ----------------------------------------------------------------------
 echo
 if [ "$DRY_RUN" = 1 ]; then printf '\033[32mDry run finished. Rerun without --dry-run to install.\033[0m\n'; exit 0; fi

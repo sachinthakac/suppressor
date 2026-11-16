@@ -275,6 +275,15 @@ if ($doAuto) {
     else { & $autoScript -VenvPath $VenvPath }
 }
 
+# ---- 9. Firefox helper ---------------------------------------------------------
+Say "Firefox helper (start/stop/restart from the extension's settings)"
+$nativeScript = Join-Path $ServerDir "native\install-native-host.ps1"
+if ($DryRun) { Plan "run $nativeScript -VenvPath `"$VenvPath`" (registry key HKCU\Software\Mozilla\NativeMessagingHosts\suppressor)" }
+else {
+    try { & $nativeScript -VenvPath $VenvPath }
+    catch { Warn "Could not register the Firefox helper: $_" }
+}
+
 # ---- done ----------------------------------------------------------------------
 Write-Host ""
 if ($DryRun) { Write-Host "Dry run finished. Rerun without -DryRun to install." -ForegroundColor Green; exit 0 }

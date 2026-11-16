@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <link rel="icon" href="icons/icon.svg">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Suppressor topics</title>
   <link rel="stylesheet" href="options.css">
@@ -61,6 +62,16 @@
           </div>
           <small id="serverHelp">Where the local classifier listens: <code>http://127.0.0.1</code> or <code>http://localhost</code>, with an optional port. Saved when you leave the field. Empty means the default, <code>http://127.0.0.1:8765</code>.</small>
           <div id="serverResult" class="result" role="status" aria-live="polite"></div>
+        </div>
+        <div class="field svc">
+          <label id="svcLabel">Classifier server</label>
+          <div class="svc-row" role="group" aria-labelledby="svcLabel">
+            <button class="btn" type="button" data-cmd="start">Start</button>
+            <button class="btn" type="button" data-cmd="stop">Stop</button>
+            <button class="btn" type="button" data-cmd="restart">Restart</button>
+          </div>
+          <small>Uses the small Firefox helper that the setup script registers. If the server runs as an auto-start service, that service is started and stopped.</small>
+          <div id="svcResult" class="result" role="status" aria-live="polite"></div>
         </div>
         <p class="adv-links"><a href="welcome.html">Setup guide</a></p>
       </div>

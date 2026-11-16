@@ -5,3 +5,5 @@ web-ext-artifacts/
 node_modules/
 server/server.log*
 server/.onnx-cache/
+server/native/suppressor-host.*
+server/native/suppressor.json

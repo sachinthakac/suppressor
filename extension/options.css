@@ -269,6 +269,11 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .conn.bad { background: var(--hide-bg); color: var(--hide); }
 .conn-detail { display: block; color: var(--dim); font-size: 12.5px; margin-top: 6px; }
 .adv-links { margin: 14px 0 0; font-size: 13px; }
+.svc { margin-top: 18px; }
+.svc-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.svc-row .btn { background: var(--surface-2); color: var(--fg); border: 1px solid var(--line); }
+.svc-row .btn:hover:not(:disabled) { border-color: var(--faint); }
+#status { cursor: pointer; }
 .adv-links a, .help a { color: var(--focus); }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }

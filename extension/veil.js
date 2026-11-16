@@ -64,10 +64,9 @@ var SupVeil = (() => {
     position: absolute;
     inset: calc(var(--feather) * -1);
     border-radius: calc(16px + var(--feather));
-    backdrop-filter: blur(11px) saturate(1.15) brightness(0.5);
+    backdrop-filter: blur(11px) saturate(1.15);
     background:
-      linear-gradient(110deg, transparent 35%, rgba(255,255,255,0.10) 50%, transparent 65%) 200% 0 / 250% 100% no-repeat,
-      radial-gradient(120% 140% at 50% 50%, rgba(10,10,14,0.10), rgba(10,10,14,0.35));
+      linear-gradient(110deg, transparent 35%, rgba(255,255,255,0.10) 50%, transparent 65%) 200% 0 / 250% 100% no-repeat;
     mask-image:
       linear-gradient(to right, transparent, #000 var(--feather), #000 calc(100% - var(--feather)), transparent),
       linear-gradient(to bottom, transparent, #000 var(--feather), #000 calc(100% - var(--feather)), transparent);
@@ -75,8 +74,7 @@ var SupVeil = (() => {
   }
   :host([data-kind="player"]) .glass {
     inset: 0; border-radius: 0; mask-image: none;
-    backdrop-filter: blur(18px) brightness(0.35);
-    background: rgba(8, 8, 10, 0.6);
+    backdrop-filter: blur(18px);
   }
   :host([data-state="pending"]) .glass { animation: sheen 1.8s ease-in-out infinite; }
   @keyframes sheen {
