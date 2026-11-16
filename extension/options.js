@@ -30,6 +30,8 @@ function svg(d) {
   return s;
 }
 const ICON_X = "M6 6l12 12M18 6L6 18";
+const ICON_CHEVRON = "M6 9l6 6 6-6";
+const ICON_EXPORT = "M12 4v11M7 10l5 5 5-5M5 20h14";
 const ICON_TRASH = "M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3";
 
 function debounce(fn, ms) {
@@ -93,6 +95,24 @@ function chipField({ values, onChange, placeholder, suggestions, cls }) {
   return wrap;
 }
 
+// ---- collapsed cards (per-browser convenience, so localStorage is fine) -------
+
+const COLLAPSED_KEY = "sup-collapsed";
+function collapsedIds() {
+  try { return new Set(JSON.parse(localStorage.getItem(COLLAPSED_KEY) || "[]")); } catch { return new Set(); }
+}
+function setCollapsed(id, on) {
+  const ids = collapsedIds();
+  if (on) ids.add(id); else ids.delete(id);
+  try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...ids])); } catch {}
+}
+
+function summaryText(t) {
+  const list = (a) => (a.length > 4 ? a.slice(0, 4).join(", ") + ` +${a.length - 4}` : a.join(", "));
+  const hide = t.suppress.length ? `Hides ${list(t.suppress)}` : "Hides everything";
+  return t.show.length ? `${hide} · Shows ${list(t.show)}` : hide;
+}
+
 // ---- topic card --------------------------------------------------------------
 
 function field(label, control, hint, full) {
@@ -112,6 +132,10 @@ function slider(t, key, label, hint) {
 function topicCard(t) {
   const card = h("section", { class: "topic" + (t.enabled === false ? " off" : "") });
   card.style.setProperty("--accent", t.color);
+  const bodyId = `body-${t.id}`;
+  const summary = h("div", { class: "summary" });
+  const updateSummary = () => { summary.textContent = summaryText(t); summary.title = summary.textContent; };
+  updateSummary();
   const warn = h("div", { class: "warn", role: "status" });
 
   const validate = debounce(async () => {
@@ -124,12 +148,12 @@ function topicCard(t) {
 
   const allLabels = () => Object.keys(library);
   const hideField = chipField({
-    values: t.suppress, onChange: () => { changed(); showField.repaint(); }, cls: "hide",
+    values: t.suppress, onChange: () => { changed(); showField.repaint(); updateSummary(); }, cls: "hide",
     placeholder: "Add a reason to hide…",
     suggestions: () => allLabels().filter((l) => !t.show.includes(l)),
   });
   const showField = chipField({
-    values: t.show, onChange: () => { changed(); hideField.repaint(); }, cls: "show",
+    values: t.show, onChange: () => { changed(); hideField.repaint(); updateSummary(); }, cls: "show",
     placeholder: "Add a reason to show…",
     suggestions: () => allLabels().filter((l) => !t.suppress.includes(l)),
   });
@@ -173,16 +197,22 @@ function topicCard(t) {
           type: "color", value: t.color, "aria-label": "Topic colour",
           oninput: (e) => { t.color = e.target.value; card.style.setProperty("--accent", t.color); save(); },
         })),
-      h("input", {
-        class: "name", value: t.name, "aria-label": "Topic name",
-        oninput: (e) => { t.name = e.target.value; changed(); },
-      }),
+      h("div", { class: "title" },
+        h("input", {
+          class: "name", value: t.name, "aria-label": "Topic name",
+          oninput: (e) => { t.name = e.target.value; changed(); },
+        }),
+        summary),
       h("label", { class: "toggle", title: "Enable this topic" },
         h("input", {
           type: "checkbox", checked: t.enabled !== false,
           onchange: (e) => { t.enabled = e.target.checked; card.classList.toggle("off", !t.enabled); save(); },
         }),
         h("span"), "On"),
+      h("button", {
+        class: "icon-btn", title: "Export this topic", "aria-label": `Export ${t.name}`,
+        onclick: () => download(`suppressor-${Sup.slug(t.name)}.json`, exportData([t], false)),
+      }, svg(ICON_EXPORT)),
       h("button", {
         class: "icon-btn", title: "Delete topic", "aria-label": `Delete ${t.name}`,
         onclick: () => {
@@ -191,8 +221,13 @@ function topicCard(t) {
           card.remove();
           save();
         },
-      }, svg(ICON_TRASH))),
-    h("div", { class: "topic-body" },
+      }, svg(ICON_TRASH)),
+      h("button", {
+        class: "icon-btn chev-btn", title: "Collapse", "aria-label": `Collapse ${t.name}`,
+        "aria-expanded": "true", "aria-controls": bodyId,
+        onclick: () => setOpen(card.classList.contains("collapsed")),
+      }, svg(ICON_CHEVRON))),
+    h("div", { class: "collapse", id: bodyId }, h("div", { class: "collapse-inner" }, h("div", { class: "topic-body" },
       field("Also known as",
         h("input", { class: "text", value: t.description || "", placeholder: "e.g. GTA 6, Grand Theft Auto VI",
           oninput: (e) => { t.description = e.target.value; changed(); } }),
@@ -216,7 +251,25 @@ function topicCard(t) {
         h("div", { class: "test" },
           h("div", { class: "test-row" }, testInput, h("button", { class: "btn", type: "button", onclick: runTest }, "Check")),
           result)),
-      h("div", { class: "full" }, warn)));
+      h("div", { class: "full" }, warn)))));
+
+  const chevBtn = card.querySelector(".chev-btn");
+  const inner = card.querySelector(".collapse-inner");
+  function setOpen(open) {
+    card.classList.toggle("collapsed", !open);
+    inner.inert = !open;
+    chevBtn.setAttribute("aria-expanded", String(open));
+    chevBtn.title = open ? "Collapse" : "Expand";
+    chevBtn.setAttribute("aria-label", `${open ? "Collapse" : "Expand"} ${t.name}`);
+    setCollapsed(t.id, !open);
+  }
+  // Clicking empty space in the header toggles too (not the name, switch or buttons).
+  card.querySelector(".topic-head").addEventListener("click", (e) => {
+    if (e.target.closest("input, button, label")) return;
+    setOpen(card.classList.contains("collapsed"));
+  });
+  setOpen(!collapsedIds().has(t.id));
+
   validate();
   return card;
 }
@@ -224,6 +277,101 @@ function topicCard(t) {
 function renderAll() {
   $("topics").replaceChildren(...topics.map(topicCard));
 }
+
+// ---- export / import ---------------------------------------------------------
+
+function toast(msg, error) {
+  const el = $("toast");
+  el.textContent = msg;
+  el.className = "toast show" + (error ? " error" : "");
+  clearTimeout(toast.t);
+  toast.t = setTimeout(() => (el.className = "toast" + (error ? " error" : "")), 4000);
+}
+
+function exportData(list, withSettings) {
+  const data = { app: "suppressor", version: 1, exported: new Date().toISOString(), topics: list };
+  if (withSettings) data.settings = { enabled: $("enabled").checked, paranoid: $("paranoid").checked };
+  return JSON.stringify(data, null, 2);
+}
+
+function download(name, text) {
+  const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+  const a = h("a", { href: url, download: name });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// Accepts a full export, a bare array of topics, or a single topic. Untrusted: clean every field.
+function parseImport(text) {
+  const data = JSON.parse(text);
+  const raw = Array.isArray(data) ? data : Array.isArray(data.topics) ? data.topics : data && data.name ? [data] : null;
+  if (!raw) throw new Error("No topics found in this file.");
+  const str = (v, max) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+  const list = (v) => (Array.isArray(v) ? v : [])
+    .filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim().slice(0, 80)).slice(0, 50);
+  const num = (v, d) => (typeof v === "number" && v >= 0 && v <= 1 ? v : d);
+  const out = raw.map((t, i) => {
+    if (!t || typeof t !== "object" || !str(t.name, 120)) return null;
+    const base = Sup.newTopic();
+    return {
+      id: typeof t.id === "string" && /^[\w-]{1,40}$/.test(t.id) ? t.id : base.id,
+      name: str(t.name, 120),
+      enabled: t.enabled !== false,
+      color: typeof t.color === "string" && /^#[0-9a-f]{6}$/i.test(t.color) ? t.color : Sup.PALETTE[(topics.length + i) % Sup.PALETTE.length],
+      description: str(t.description, 300),
+      kind: str(t.kind, 60),
+      keywords: list(t.keywords),
+      hints: list(t.hints),
+      suppress: list(t.suppress),
+      show: list(t.show),
+      matchThreshold: num(t.matchThreshold, base.matchThreshold),
+      suppressThreshold: num(t.suppressThreshold, base.suppressThreshold),
+    };
+  }).filter(Boolean);
+  if (!out.length) throw new Error("No valid topics found in this file.");
+  const settings = data && typeof data.settings === "object" && data.settings ? data.settings : null;
+  return { topics: out, settings };
+}
+
+$("export").addEventListener("click", () => {
+  const day = new Date().toISOString().slice(0, 10);
+  download(`suppressor-settings-${day}.json`, exportData(topics, true));
+  toast(`Exported ${topics.length} topic${topics.length === 1 ? "" : "s"}.`);
+});
+
+$("import").addEventListener("click", () => $("importFile").click());
+$("importFile").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  let parsed;
+  try {
+    if (file.size > 1_000_000) throw new Error("File is too large.");
+    parsed = parseImport(await file.text());
+  } catch (err) {
+    toast(`Couldn't import: ${err.message}`, true);
+    return;
+  }
+  const replacing = parsed.topics.filter((t) => topics.some((x) => x.id === t.id));
+  const adding = parsed.topics.length - replacing.length;
+  const parts = [];
+  if (adding) parts.push(`add ${adding} new topic${adding === 1 ? "" : "s"}`);
+  if (replacing.length) parts.push(`replace ${replacing.map((t) => `“${t.name}”`).join(", ")}`);
+  if (!confirm(`Import from ${file.name}?\n\nThis will ${parts.join(" and ")}. Other topics are kept.`)) return;
+
+  const merged = topics.map((x) => parsed.topics.find((t) => t.id === x.id) || x);
+  for (const t of parsed.topics) if (!merged.some((x) => x.id === t.id)) merged.push(t);
+  const update = { topics: merged };
+  if (parsed.settings) {
+    if (typeof parsed.settings.enabled === "boolean") update.enabled = parsed.settings.enabled;
+    if (typeof parsed.settings.paranoid === "boolean") update.paranoid = parsed.settings.paranoid;
+  }
+  await browser.storage.local.set(update);
+  await load();
+  toast(`Imported ${parsed.topics.length} topic${parsed.topics.length === 1 ? "" : "s"}.`);
+});
 
 // ---- boot ------------------------------------------------------------------
 

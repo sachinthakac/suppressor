@@ -19,6 +19,15 @@
       <span id="status" class="status"><i></i><span>Checking classifier…</span></span>
       <label class="toggle"><input type="checkbox" id="enabled"><span></span>Enabled</label>
       <label class="toggle" title="Blur every item until it has been checked"><input type="checkbox" id="paranoid"><span></span>Paranoid</label>
+      <span class="io">
+        <button id="export" class="ghost" title="Download all topics and settings as a JSON file">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Export
+        </button>
+        <button id="import" class="ghost" title="Load topics from a JSON file">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M7 9l5-5 5 5M5 20h14"/></svg>Import
+        </button>
+        <input type="file" id="importFile" accept=".json,application/json" hidden>
+      </span>
     </div>
   </header>
 
@@ -43,6 +52,8 @@
     <option value="sports league"><option value="football team"><option value="band"><option value="anime">
     <option value="election"><option value="product launch">
   </datalist>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="shared.js"></script>
   <script src="options.js"></script>

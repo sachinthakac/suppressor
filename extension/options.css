@@ -73,6 +73,27 @@ h1 { font-size: 18px; margin: 0; }
 .toggle input:checked + span::after { transform: translateX(14px); }
 .toggle input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; }
 
+.io { display: inline-flex; gap: 6px; }
+.ghost {
+  all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 11px; border-radius: 9px; border: 1px solid var(--line);
+  font-size: 13px; font-weight: 550; color: var(--fg); background: var(--surface);
+}
+.ghost:hover { border-color: var(--faint); }
+.ghost:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ghost svg { width: 16px; height: 16px; }
+
+.toast {
+  position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px);
+  max-width: min(520px, calc(100vw - 32px));
+  padding: 10px 16px; border-radius: 12px;
+  background: var(--fg); color: var(--bg); font-weight: 550; font-size: 13.5px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.2s;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+.toast.error { background: var(--hide); color: #fff; }
+
 main { max-width: 880px; margin: 0 auto; padding: 24px 16px 64px; }
 
 /* ---- topic card ---- */
@@ -114,10 +135,31 @@ main { max-width: 880px; margin: 0 auto; padding: 24px 16px 64px; }
 .icon-btn:focus-visible { outline: 2px solid var(--focus); }
 svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
+.title { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.title .name { width: 100%; }
+.summary {
+  display: none; padding: 0 6px; font-size: 12.5px; color: var(--dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.topic.collapsed .summary { display: block; }
+.topic-head { cursor: pointer; }
+.topic-head input, .topic-head label, .topic-head button { cursor: auto; }
+.topic-head .icon-btn, .topic-head .swatch, .topic-head .toggle { cursor: pointer; }
+.chev-btn svg { transition: transform 0.22s ease; }
+.chev-btn:hover { color: var(--fg); }
+.topic.collapsed .chev-btn svg { transform: rotate(-90deg); }
+.topic.collapsed .topic-head { border-bottom-color: transparent; }
+
+.collapse { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 0.25s ease; }
+.topic.collapsed .collapse { grid-template-rows: 0fr; }
+.collapse-inner { min-height: 0; overflow: hidden; }
+
 .topic-body { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 20px; padding: 18px 16px 20px; }
 @media (max-width: 640px) { .topic-body { grid-template-columns: 1fr; } }
 .full { grid-column: 1 / -1; }
 
+.field, .test-row .text, .chips input { min-width: 0; }
+.brand { min-width: 0; }
 .field > label, .field > .flabel { display: block; font-size: 12px; font-weight: 600; color: var(--dim); margin-bottom: 6px; letter-spacing: 0.02em; }
 .field small { display: block; color: var(--faint); font-size: 12px; margin-top: 5px; }
 .text {

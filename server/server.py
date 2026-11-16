@@ -2,9 +2,12 @@
 
 Runs on 127.0.0.1 only. The extension POSTs batches of short text snippets
 (video titles, channel names, comment text) and gets back, per snippet, the
-probability that it is about the watched topic and that it spoils it.
+probability that it is about each configured topic and for each reason.
 
     python server/server.py            # http://127.0.0.1:8765
+
+Under pythonw.exe (no console, e.g. the autostart task) all output goes to
+server/server.log.
 """
 from __future__ import annotations
 
@@ -16,8 +19,30 @@ import threading
 import time
 from collections import OrderedDict
 
+HERE = os.path.dirname(os.path.abspath(__file__))
+LOG_FILE = os.path.join(HERE, "server.log")
+
+# pythonw.exe has no stdout/stderr; anything that prints (logging, uvicorn,
+# download progress bars) would crash. Send it all to a log file instead.
+if sys.stdout is None or sys.stderr is None:
+    if os.path.exists(LOG_FILE) and os.path.getsize(LOG_FILE) > 5_000_000:
+        os.replace(LOG_FILE, LOG_FILE + ".1")
+    _log = open(LOG_FILE, "a", encoding="utf-8", buffering=1)
+    sys.stdout = sys.stdout or _log
+    sys.stderr = sys.stderr or _log
+
+
+def _model_cached(model_id: str) -> bool:
+    hub = os.environ.get("HF_HUB_CACHE") or os.path.join(
+        os.environ.get("HF_HOME") or os.path.join(os.path.expanduser("~"), ".cache", "huggingface"), "hub")
+    return os.path.isdir(os.path.join(hub, "models--" + model_id.replace("/", "--")))
+
+
 os.environ.setdefault("USE_TF", "0")
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Skip Hugging Face network checks once the model is downloaded (faster, works offline).
+if "HF_HUB_OFFLINE" not in os.environ and _model_cached(os.environ.get("SUPPRESSOR_MODEL", "convaiinnovations/laya")):
+    os.environ["HF_HUB_OFFLINE"] = "1"
+sys.path.insert(0, HERE)
 
 import laya  # noqa: E402
 import uvicorn  # noqa: E402
@@ -165,4 +190,5 @@ def validate(req: ValidateRequest):
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host=HOST, port=PORT, log_level="warning")
+    # log_config=None: keep uvicorn on our logging setup (and the log file under pythonw).
+    uvicorn.run(app, host=HOST, port=PORT, log_level="warning", log_config=None)

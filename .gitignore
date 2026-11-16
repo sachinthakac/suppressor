@@ -3,3 +3,4 @@ __pycache__/
 .venv/
 web-ext-artifacts/
 node_modules/
+server/server.log*

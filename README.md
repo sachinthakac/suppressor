@@ -56,6 +56,25 @@ Firefox: open `about:debugging#/runtime/this-firefox` → **Load Temporary Add-o
 `extension/manifest.json`. For a persistent install use `npx web-ext run -s extension` while
 developing, or sign it via AMO (unlisted) for permanent use.
 
+### Start the server automatically
+
+```powershell
+./server/install-autostart.ps1      # registers a logon task; starts it now
+./server/uninstall-autostart.ps1    # removes it
+```
+
+This adds a Task Scheduler task, **Suppressor server**, for your user. No admin rights are needed.
+It runs `server/.venv/Scripts/pythonw.exe` (no console window) at logon and restarts it if it
+crashes. Output goes to `server/server.log`. To stop it for now: `Stop-ScheduledTask "Suppressor server"`.
+Don't run `start.ps1` at the same time; both use port 8765.
+
+## Backing up and sharing topics
+
+On the options page, **Export** downloads all topics and settings as JSON, and **Import** loads
+one. Importing merges: topics with the same id are replaced, new ones are added, others are kept.
+Each topic card also has its own export button, for sharing a single topic. Imported files are
+treated as untrusted, and any unexpected fields are dropped.
+
 ## Accuracy
 
 `server/.venv/Scripts/python -I server/eval_topics.py` runs the default GTA VI topic over 44
