@@ -39,11 +39,15 @@ def _model_cached(model_id: str) -> bool:
     return os.path.isdir(os.path.join(hub, "models--" + model_id.replace("/", "--")))
 
 
+sys.path.insert(0, HERE)
+from model_pin import DEFAULT_MODEL, pin_revision  # noqa: E402
+
 os.environ.setdefault("USE_TF", "0")
 # Skip Hugging Face network checks once the model is downloaded (faster, works offline).
-if "HF_HUB_OFFLINE" not in os.environ and _model_cached(os.environ.get("SUPPRESSOR_MODEL", "convaiinnovations/laya")):
+if "HF_HUB_OFFLINE" not in os.environ and _model_cached(os.environ.get("SUPPRESSOR_MODEL", DEFAULT_MODEL)):
     os.environ["HF_HUB_OFFLINE"] = "1"
-sys.path.insert(0, HERE)
+# Load the commit setup downloaded; offline, laya can't resolve "main" to it.
+pin_revision(os.environ.get("SUPPRESSOR_MODEL", DEFAULT_MODEL))
 
 import laya  # noqa: E402
 import uvicorn  # noqa: E402
@@ -56,7 +60,7 @@ from topics import build_questions, signature, summarise  # noqa: E402
 SERVER_VERSION = "0.4.0"
 HOST = "127.0.0.1"
 PORT = int(os.environ.get("SUPPRESSOR_PORT", "8765"))
-MODEL_ID = os.environ.get("SUPPRESSOR_MODEL", "convaiinnovations/laya")
+MODEL_ID = os.environ.get("SUPPRESSOR_MODEL", DEFAULT_MODEL)
 CACHE_SIZE = 20_000
 
 log = logging.getLogger("suppressor")

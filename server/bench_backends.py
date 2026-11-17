@@ -24,12 +24,16 @@ sys.path.insert(0, HERE)
 os.environ.setdefault("USE_TF", "0")
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 
+from model_pin import DEFAULT_MODEL, pin_revision  # noqa: E402
+
+pin_revision(os.environ.get("SUPPRESSOR_MODEL", DEFAULT_MODEL))
+
 import laya  # noqa: E402
 
 from eval_topics import DATA, load_topic, scores  # noqa: E402
 from topics import build_questions  # noqa: E402
 
-MODEL_ID = os.environ.get("SUPPRESSOR_MODEL", "convaiinnovations/laya")
+MODEL_ID = os.environ.get("SUPPRESSOR_MODEL", DEFAULT_MODEL)
 SINGLE_REPEATS = 3
 ONNX_CACHE = os.path.join(HERE, ".onnx-cache")
 log = logging.getLogger("bench")

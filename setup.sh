@@ -24,7 +24,8 @@ set -euo pipefail
 MIN_PY_MAJOR=3; MIN_PY_MINOR=12     # the pinned deps (numpy 2.5, fastapi 0.163, ...) need 3.12+
 TORCH_VERSION="2.14.1"              # known-good; falls back to the newest on the index if missing
 MODEL="convaiinnovations/laya"
-MODEL_REVISION="55cf4c4ebb4ebe31b2550e8bdf3bd21b99753851"   # laya 0.4.35's pinned revision
+# The model commit to download and load lives in server/model_revision.txt (laya 0.4.35's
+# pinned revision), so the server reads the same value. Read below, once ROOT is known.
 # Only the English model's files (~850 MB). The full repo (2.4 GB) also holds
 # multilingual/ and typed-decisions/ variants that the server doesn't use.
 MODEL_FILES="model.safetensors rl_agent_config.json encoder/config.json tokenizer/tokenizer.json tokenizer/tokenizer_config.json"
@@ -35,6 +36,8 @@ CUDA_BUILDS="cu130:1300 cu128:1208 cu126:1206"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVER_DIR="$ROOT/server"
 REQUIREMENTS="$SERVER_DIR/requirements.txt"
+MODEL_REVISION="$(tr -d ' \r\n' < "$SERVER_DIR/model_revision.txt")"
+[ -n "$MODEL_REVISION" ] || { echo "ERROR: $SERVER_DIR/model_revision.txt is empty" >&2; exit 1; }
 
 DEVICE="auto"; VENV=""; AUTOSTART=""; DRY_RUN=0
 
@@ -226,7 +229,8 @@ if [ "$DRY_RUN" = 1 ]; then
     case "$TORCH_TAG" in cu*) expect=cuda ;; "") expect=mps ;; *) expect=cpu ;; esac
     plan "run a one-shot laya.load + predict with $VENV_PY (expects device $expect)"
 else
-    SUP_MODEL="$MODEL" HF_HUB_OFFLINE=1 USE_TF=0 "$VENV_PY" -I - <<'PY' || fail "Smoke test failed."
+    # LAYA_REVISION: offline, laya can only find the cached copy by the commit we downloaded.
+    SUP_MODEL="$MODEL" LAYA_REVISION="$MODEL_REVISION" HF_HUB_OFFLINE=1 USE_TF=0 "$VENV_PY" -I - <<'PY' || fail "Smoke test failed."
 import os, time, warnings
 warnings.filterwarnings('ignore', category=RuntimeWarning)  # laya's calibration notice
 import laya
