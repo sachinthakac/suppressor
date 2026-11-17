@@ -38,7 +38,8 @@ $ErrorActionPreference = "Stop"
 $MinPython = @(3, 12)          # the pinned deps (numpy 2.5, fastapi 0.163, ...) need 3.12+
 $TorchVersion = "2.14.1"       # known-good; falls back to the newest on the index if missing
 $Model = "convaiinnovations/laya"
-$ModelRevision = "55cf4c4ebb4ebe31b2550e8bdf3bd21b99753851"   # laya 0.4.35's pinned revision
+# The model commit to download and load lives in server\model_revision.txt (laya 0.4.35's
+# pinned revision), so the server reads the same value. Read below, once $ServerDir is known.
 # Only the English model's files (~850 MB). The full repo (2.4 GB) also holds
 # multilingual/ and typed-decisions/ variants that the server doesn't use.
 $ModelFiles = @("model.safetensors", "rl_agent_config.json", "encoder/config.json", "tokenizer/tokenizer.json", "tokenizer/tokenizer_config.json")
@@ -52,6 +53,8 @@ $CudaBuilds = @(
 
 $Root = $PSScriptRoot
 $ServerDir = Join-Path $Root "server"
+$ModelRevision = (Get-Content -Raw (Join-Path $ServerDir "model_revision.txt")).Trim()
+if (-not $ModelRevision) { throw "server\model_revision.txt is empty" }
 $Requirements = Join-Path $ServerDir "requirements.txt"
 if (-not $VenvPath) { $VenvPath = Join-Path $ServerDir ".venv" }
 elseif (-not [IO.Path]::IsPathRooted($VenvPath)) { $VenvPath = Join-Path (Get-Location).Path $VenvPath }
@@ -255,8 +258,9 @@ p = float(out['answers']['subject']['probabilities']['topic'])
 print('    device: %s' % getattr(agent, 'device', '?'))
 print('    loaded in %.1f s, %.0f ms per call, P(topic | %r) = %.2f' % (load_s, ms, title, p))
 '@
+# LAYA_REVISION: offline, laya can only find the cached copy by the commit we downloaded.
 if ($DryRun) { Plan "run a one-shot laya.load + predict with $VenvPy (expects device $(if ($torchTag -eq 'cpu') { 'cpu' } else { 'cuda' }))" }
-else { Invoke-PySnippet "Smoke test" $VenvPy $smoke @{ SUP_MODEL = $Model; HF_HUB_OFFLINE = "1"; USE_TF = "0" } }
+else { Invoke-PySnippet "Smoke test" $VenvPy $smoke @{ SUP_MODEL = $Model; LAYA_REVISION = $ModelRevision; HF_HUB_OFFLINE = "1"; USE_TF = "0" } }
 
 # ---- 8. auto-start -------------------------------------------------------------
 Say "Auto-start at logon"
